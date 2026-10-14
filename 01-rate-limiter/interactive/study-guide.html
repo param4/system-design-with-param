@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rate Limiter Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column (~820px) with full-bleed simulator panels; brand = navy + cyan + violet */
+:root{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10);
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.13); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.13); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.65;margin:0}
+.wrap{max-width:860px;margin:0 auto;padding-inline:20px;padding-block:40px 80px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2.2rem,6vw,3.6rem);font-weight:700;letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2.1rem);font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.25rem;font-weight:700}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.stack{display:flex;flex-direction:column;gap:14px}
+section{display:flex;flex-direction:column;gap:18px;padding-top:56px}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);padding:1px 6px;border-radius:4px}
+a{color:var(--cyan)}
+ul,ol{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+strong{font-weight:600}
+
+.hero{display:flex;flex-direction:column;gap:16px;padding-bottom:8px}
+.hero .lede{font-size:1.15rem;max-width:62ch;color:var(--muted)}
+.code429{font-family:var(--f-mono);font-size:.85rem;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;white-space:pre;line-height:1.55}
+.code429 .s{color:var(--bad);font-weight:500}
+.code429 .h{color:var(--cyan)}
+
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+nav.toc a{font-family:var(--f-mono);font-size:.78rem;text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover,nav.toc a:focus-visible{border-color:var(--cyan);outline:none}
+
+.plan{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.plan>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.plan .tag{font-family:var(--f-mono);font-size:.72rem;color:var(--violet);letter-spacing:.08em;text-transform:uppercase}
+.verdict{border-left:3px solid var(--cyan);padding:4px 0 4px 16px}
+
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.t{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.algo{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.algo-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 14px}
+.algo-head .who{font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.twocol>div{min-width:0}
+.pros h4,.cons h4{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 6px;font-weight:500}
+.pros h4{color:var(--ok)} .cons h4{color:var(--bad)}
+.pros ul,.cons ul{font-size:.93rem}
+pre.code{margin:0;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:.8rem;line-height:1.6}
+pre.code .c{color:var(--muted)} pre.code .w{color:var(--warn)}
+
+.sim{border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:14px;display:flex;flex-direction:column;gap:12px}
+.sim-top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.sim-label{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+button{font:500 .82rem var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 11px;cursor:pointer}
+button:hover{border-color:var(--cyan)}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+button.attack{border-color:var(--bad);color:var(--bad)}
+canvas{width:100%;height:132px;display:block}
+.state{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;font-family:var(--f-mono);font-size:.82rem;font-variant-numeric:tabular-nums;min-height:40px}
+.cells{display:inline-flex;gap:4px;vertical-align:middle}
+.cell{width:22px;height:22px;border-radius:4px;border:1.5px solid var(--line);position:relative;overflow:hidden;background:var(--surface)}
+.cell i{position:absolute;left:0;right:0;bottom:0;background:var(--cyan)}
+.cell.q i{background:var(--warn)}
+.chip{display:inline-block;background:var(--violet-soft);color:var(--violet);border-radius:4px;padding:1px 6px;margin:2px 3px 2px 0}
+.stat-ok{color:var(--ok)} .stat-bad{color:var(--bad)} .stat-q{color:var(--warn)}
+.note{font-size:.82rem;color:var(--muted);min-height:1.2em}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.legend .l-ok::before{background:var(--ok)} .legend .l-bad::before{background:var(--bad);border-radius:2px}
+.legend .l-q::before{border:2px solid var(--warn);background:transparent;width:7px;height:7px}
+
+figure{margin:0;display:flex;flex-direction:column;gap:8px}
+figure .fig{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+figcaption{font-size:.85rem;color:var(--muted)}
+svg text{font-family:var(--f-mono)}
+
+.race{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.race>div{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:12px;text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0;transition:border-color .2s}
+.race .nm{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.race .val{font-family:var(--f-display);font-size:1.6rem;font-weight:700}
+.race .active{border-color:var(--cyan)}
+.racelog{font-family:var(--f-mono);font-size:.82rem;display:flex;flex-direction:column;gap:6px;padding-left:1.4em;min-height:120px}
+.result{font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0}
+.seg button[aria-pressed="true"]{background:var(--cyan);color:var(--bg)}
+
+.mermaid-box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
+.beats{counter-reset:b;list-style:none;padding:0;gap:0}
+.beats li{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.beats li:last-child{border-bottom:none}
+.beats .tm{font-family:var(--f-mono);font-size:.8rem;color:var(--cyan);font-variant-numeric:tabular-nums;padding-top:2px}
+.callout{background:var(--violet-soft);border-radius:10px;padding:14px 16px;font-size:.95rem}
+footer{margin-top:64px;font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+
+@media (max-width:640px){
+  .twocol{grid-template-columns:1fr}
+  .race{grid-template-columns:1fr}
+  .beats li{grid-template-columns:1fr;gap:2px}
+  .algo{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <span class="eyebrow">System Design With Param · Video 01 research</span>
+  <h1>Rate limiters, taken apart</h1>
+  <p class="lede">What a rate limiter is, the five algorithms with live simulators, the distributed design, where it breaks, and what Part 2 builds.</p>
+  <div class="code429" aria-label="Example 429 response"><span class="s">HTTP/1.1 429 Too Many Requests</span>
+<span class="h">Retry-After:</span> 2
+<span class="h">X-RateLimit-Limit:</span> 5
+<span class="h">X-RateLimit-Remaining:</span> 0
+<span class="h">X-RateLimit-Reset:</span> 1760331600</div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#what">What &amp; why</a><a href="#reqs">Requirements</a><a href="#where">Where it lives</a>
+    <a href="#fixed">Fixed window</a><a href="#log">Sliding log</a><a href="#counter">Sliding counter</a><a href="#token">Token bucket</a><a href="#leaky">Leaky bucket</a>
+    <a href="#compare">Compare</a><a href="#hld">Distributed design</a><a href="#race">Race condition</a><a href="#extras">Interview extras</a><a href="#build">Build plan</a>
+  </nav>
+</header>
+
+<!-- ============ PLAN ============ -->
+
+
+<!-- ============ WHAT ============ -->
+<section id="what">
+  <span class="eyebrow">Concept</span>
+  <h2>What a rate limiter is</h2>
+  <p>A rate limiter caps how many requests a client can make in a given time. Requests within the limit go through. Requests over it are rejected (HTTP <code>429 Too Many Requests</code>, RFC 6585), queued, or slowed down. It sits in front of your service and answers one question per request: <em>allow or block?</em></p>
+  <p>Real example: GitHub's REST API allows 5,000 requests per hour for an authenticated user and 60 per hour unauthenticated. Every response tells you how many you have left.</p>
+  <h3>Why it exists</h3>
+  <ul>
+    <li><strong>Abuse and DoS:</strong> stops one client from flooding you, whether it's a bot, a scraper or a buggy retry loop.</li>
+    <li><strong>Fairness:</strong> stops one noisy tenant from slowing everyone else down (the noisy-neighbour problem).</li>
+    <li><strong>Cost control:</strong> every call to a paid downstream (SMS, payments, LLM tokens) costs money. A limit caps the bill.</li>
+    <li><strong>Protecting weaker systems:</strong> a database or legacy service has a fixed capacity, and the limiter keeps traffic under it so it doesn't fall over.</li>
+    <li><strong>Security:</strong> it slows brute-force attacks, such as login attempts and OTP guessing.</li>
+  </ul>
+  <p class="muted">Related terms you'll be asked to tell apart: <strong>rate limiting</strong> rejects a client over its quota, <strong>throttling</strong> slows a client down, and <strong>load shedding</strong> drops requests when the server itself is overloaded, whoever sent them.</p>
+</section>
+
+<!-- ============ REQUIREMENTS ============ -->
+<section id="reqs">
+  <span class="eyebrow">Interview step 1</span>
+  <h2>Requirements</h2>
+  <div class="twocol">
+    <div class="stack">
+      <h3>Functional</h3>
+      <ul>
+        <li>Limit by a key: user ID, API key, IP or endpoint</li>
+        <li>Rules are configurable, e.g. <code>100 req/min</code> per user, <code>5 req/min</code> on <code>/login</code></li>
+        <li>Rejected callers get a 429 plus headers saying when to retry</li>
+        <li>Several rules at once, e.g. per second <em>and</em> per day</li>
+      </ul>
+    </div>
+    <div class="stack">
+      <h3>Non-functional</h3>
+      <ul>
+        <li>Low latency: the check runs on every request, so it must cost about a millisecond</li>
+        <li>Accurate across many servers (the hard part)</li>
+        <li>Highly available: if the limiter dies, the API shouldn't</li>
+        <li>Memory-efficient: millions of keys</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHERE ============ -->
+<section id="where">
+  <span class="eyebrow">Placement</span>
+  <h2>Where the limiter lives</h2>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 760 210" width="100%" style="min-width:560px" role="img" aria-label="Three placement options: client side, API gateway, inside the service">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+        <g fill="none" stroke="var(--line)" stroke-width="1.5">
+          <rect x="10" y="70" width="120" height="64" rx="8" fill="var(--surface)"/>
+          <rect x="190" y="70" width="140" height="64" rx="8" fill="var(--surface)"/>
+          <rect x="390" y="56" width="160" height="92" rx="8" fill="var(--cyan-soft)" stroke="var(--cyan)"/>
+          <rect x="610" y="70" width="140" height="64" rx="8" fill="var(--surface)"/>
+        </g>
+        <g stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ar)">
+          <line x1="130" y1="102" x2="186" y2="102"/><line x1="330" y1="102" x2="386" y2="102"/><line x1="550" y1="102" x2="606" y2="102"/>
+        </g>
+        <g font-size="13" fill="var(--ink)" text-anchor="middle">
+          <text x="70" y="98">Client</text><text x="70" y="116" fill="var(--muted)" font-size="11">app / browser</text>
+          <text x="260" y="98">Load balancer</text>
+          <text x="470" y="92">API gateway</text><text x="470" y="110" fill="var(--cyan)" font-size="11">rate limiter</text><text x="470" y="126" fill="var(--muted)" font-size="11">middleware</text>
+          <text x="680" y="98">Service</text><text x="680" y="116" fill="var(--muted)" font-size="11">in-code limiter</text>
+        </g>
+        <g font-size="11" fill="var(--muted)" text-anchor="middle">
+          <text x="70" y="160">✗ can't trust it</text><text x="70" y="176">(attacker skips it)</text>
+          <text x="470" y="176">✓ usual answer: one place,</text><text x="470" y="192">before any service runs</text>
+          <text x="680" y="160">✓ full context</text><text x="680" y="176">(user plan, payload)</text>
+        </g>
+        <text x="470" y="40" font-size="11" fill="var(--cyan)" text-anchor="middle">← most common</text>
+      </svg>
+    </div>
+    <figcaption>Client-side limits are a courtesy and can't be enforced. Gateways (Kong, AWS API Gateway, NGINX, Envoy) are the usual answer. Put the limiter in code when the rule needs business context.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ ALGORITHMS ============ -->
+<section id="algos">
+  <span class="eyebrow">The five algorithms</span>
+  <h2>How each algorithm decides</h2>
+  <p>Every simulator below uses the same rule, <strong>5 requests per 10 seconds</strong>, so you can compare them. The timeline shows the last 20 seconds and the right edge is <em>now</em>. Try <strong>Edge attack</strong> on each: it fires 5 requests just before a window boundary and 5 just after.</p>
+  <div class="legend"><span class="l-ok">allowed</span><span class="l-bad">rejected (429)</span><span class="l-q">queued</span></div>
+</section>
+
+<!-- Fixed window -->
+<section id="fixed" style="padding-top:28px">
+<div class="algo">
+  <div class="algo-head"><h3>1 · Fixed window counter</h3><span class="who">used for: daily / monthly quotas</span></div>
+  <p>Cut time into fixed windows (0–10 s, 10–20 s, …). Keep one counter per key per window. Increment the counter on each request and reject once it passes the limit. When a new window starts, the count is back to zero.</p>
+  <div class="sim" data-sim="fixed"></div>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 700 150" width="100%" style="min-width:520px" role="img" aria-label="Boundary problem: 5 requests at 9.5 seconds and 5 at 10.5 seconds, all allowed, 10 requests in 1 second">
+        <line x1="40" y1="100" x2="660" y2="100" stroke="var(--line)" stroke-width="2"/>
+        <line x1="350" y1="30" x2="350" y2="110" stroke="var(--muted)" stroke-dasharray="4 4"/>
+        <rect x="320" y="34" width="60" height="62" fill="var(--violet-soft)"/>
+        <g fill="var(--ok)">
+          <circle cx="324" cy="88" r="5"/><circle cx="330" cy="76" r="5"/><circle cx="336" cy="64" r="5"/><circle cx="341" cy="52" r="5"/><circle cx="346" cy="40" r="5"/>
+          <circle cx="355" cy="88" r="5"/><circle cx="360" cy="76" r="5"/><circle cx="365" cy="64" r="5"/><circle cx="370" cy="52" r="5"/><circle cx="376" cy="40" r="5"/>
+        </g>
+        <g font-size="11" fill="var(--muted)" text-anchor="middle">
+          <text x="40" y="122">0 s</text><text x="350" y="122">10 s</text><text x="660" y="122">20 s</text>
+          <text x="195" y="70">window 1: 5/5 ✓</text><text x="505" y="70">window 2: 5/5 ✓</text>
+        </g>
+        <text x="350" y="142" font-size="12" fill="var(--violet)" text-anchor="middle">10 requests in about 1 second. Limit was 5 per 10 s.</text>
+      </svg>
+    </div>
+    <figcaption><strong>The boundary problem.</strong> Each window is under its limit, but around the edge the client gets 2× the limit. This is the classic interview follow-up.</figcaption>
+  </figure>
+  <div class="twocol">
+    <div class="pros"><h4>Pros</h4><ul><li>One integer per key, so the cheapest option</li><li><code>INCR</code> is atomic in Redis</li><li>Easy to explain and reset</li></ul></div>
+    <div class="cons"><h4>Cons</h4><ul><li>2× burst at window edges</li><li>A thundering herd when every client's window resets at :00</li></ul></div>
+  </div>
+<pre class="code"><span class="c">// Redis version</span>
+allow(key, now):
+  win   = floor(now / W)
+  k     = key + ":" + win
+  count = INCR(k)                 <span class="c">// atomic</span>
+  if count == 1: EXPIRE(k, W)     <span class="w">// ⚠ crash between INCR and EXPIRE → key never expires → user blocked forever</span>
+  return count &lt;= LIMIT</pre>
+</div>
+</section>
+
+<!-- Sliding log -->
+<section id="log" style="padding-top:28px">
+<div class="algo">
+  <div class="algo-head"><h3>2 · Sliding window log</h3><span class="who">used for: strict, low-volume limits (login, OTP)</span></div>
+  <p>Store the timestamp of every allowed request. On each new request, delete timestamps older than <em>now − 10 s</em> and count what's left. If the count is under the limit, allow the request and add its timestamp. The window slides with the clock, so there's no boundary to exploit.</p>
+  <div class="sim" data-sim="log"></div>
+  <div class="twocol">
+    <div class="pros"><h4>Pros</h4><ul><li>Exact: never more than the limit in any 10 s span</li><li>No boundary burst</li></ul></div>
+    <div class="cons"><h4>Cons</h4><ul><li>Memory grows with the limit: 1,000 req/hr = 1,000 timestamps per user</li><li>Check-then-add is a race across servers, so it needs Lua</li></ul></div>
+  </div>
+<pre class="code"><span class="c">// Redis sorted set: score = timestamp</span>
+allow(key, now):
+  ZREMRANGEBYSCORE(key, 0, now - W)   <span class="c">// drop old entries</span>
+  if ZCARD(key) &lt; LIMIT:
+    ZADD(key, now, uniqueId)
+    EXPIRE(key, W)
+    return true
+  return false                       <span class="w">// ⚠ two servers can both see 4 and both add → 6</span></pre>
+</div>
+</section>
+
+<!-- Sliding counter -->
+<section id="counter" style="padding-top:28px">
+<div class="algo">
+  <div class="algo-head"><h3>3 · Sliding window counter</h3><span class="who">used by: Cloudflare</span></div>
+  <p>A cheap approximation of the sliding log. Keep only two counters: the previous window and the current one. Estimate the count over the last 10 s by assuming the previous window's requests were spread evenly across it:</p>
+  <p class="mono" style="background:var(--sunk);padding:10px 14px;border-radius:8px;overflow-x:auto">estimate = prev × (1 − elapsed/W) + curr</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 700 140" width="100%" style="min-width:520px" role="img" aria-label="Sliding window counter: 25 percent into the current window, 75 percent of the previous window's count is counted">
+        <rect x="40" y="40" width="300" height="44" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="340" y="40" width="300" height="44" fill="var(--surface)" stroke="var(--line)"/>
+        <rect x="115" y="34" width="300" height="56" fill="var(--violet-soft)" stroke="var(--violet)" stroke-dasharray="5 4"/>
+        <line x1="415" y1="24" x2="415" y2="100" stroke="var(--cyan)" stroke-width="2"/>
+        <g font-size="12" text-anchor="middle" fill="var(--ink)">
+          <text x="190" y="67">previous: 8</text><text x="510" y="67">current: 3</text>
+        </g>
+        <g font-size="11" text-anchor="middle" fill="var(--muted)">
+          <text x="228" y="110">75% of previous still inside the sliding window</text>
+          <text x="415" y="18" fill="var(--cyan)">now (25% into window)</text>
+          <text x="350" y="132" fill="var(--violet)">estimate = 8 × 0.75 + 3 = 9 → limit 10 → allow</text>
+        </g>
+      </svg>
+    </div>
+    <figcaption>Cloudflare wrote that this approximation wrongly allowed or limited only 0.003% of 400 million requests they measured (Cloudflare blog, 2017).</figcaption>
+  </figure>
+  <div class="sim" data-sim="counter"></div>
+  <div class="twocol">
+    <div class="pros"><h4>Pros</h4><ul><li>Two integers per key, so it's cheap</li><li>Smooths out the boundary burst</li><li>Accurate enough at large scale</li></ul></div>
+    <div class="cons"><h4>Cons</h4><ul><li>An approximation: it assumes the previous window was uniform</li><li>Harder to explain to your team (and to viewers)</li></ul></div>
+  </div>
+<pre class="code">allow(key, now):
+  cur     = floor(now / W);  elapsed = (now mod W) / W
+  prev    = GET(key:cur-1) or 0
+  curr    = GET(key:cur)   or 0
+  if prev * (1 - elapsed) + curr &gt;= LIMIT: return false
+  INCR(key:cur);  EXPIRE(key:cur, 2 * W)
+  return true                        <span class="w">// ⚠ read-then-write again → Lua for exactness</span></pre>
+</div>
+</section>
+
+<!-- Token bucket -->
+<section id="token" style="padding-top:28px">
+<div class="algo">
+  <div class="algo-head"><h3>4 · Token bucket</h3><span class="who">used by: Stripe, AWS API Gateway</span></div>
+  <p>A bucket holds up to <strong>capacity</strong> tokens (here 5). Tokens drip in at a fixed <strong>refill rate</strong> (here 0.5 per second). Each request takes one token, and an empty bucket means 429. The capacity sets the largest allowed burst and the refill rate sets the long-run average.</p>
+  <p><strong>Key implementation insight:</strong> there's no background timer adding tokens. Store <code>tokens</code> and <code>last_refill</code>, and on each request compute the refill as <code>(now − last) × rate</code>. That's two numbers per key and no cron job. Say this in the video, because most explainers skip it.</p>
+  <div class="sim" data-sim="token"></div>
+  <div class="twocol">
+    <div class="pros"><h4>Pros</h4><ul><li>Allows short bursts, which is how real clients behave</li><li>Two values per key</li><li>Two knobs that are easy to reason about: burst and average</li><li>The default choice for public APIs</li></ul></div>
+    <div class="cons"><h4>Cons</h4><ul><li>Two parameters to tune per rule</li><li>The read-modify-write needs Lua when it's distributed</li><li>A full bucket lets a burst hit the backend at once</li></ul></div>
+  </div>
+<pre class="code">allow(key, now):
+  {tokens, last} = HGETALL(key) or {CAPACITY, now}
+  tokens = min(CAPACITY, tokens + (now - last) * RATE)   <span class="c">// lazy refill</span>
+  if tokens &lt; 1:
+    return {false, retryAfter: (1 - tokens) / RATE}
+  HSET(key, tokens - 1, now)
+  return true                        <span class="w">// ⚠ the bug Part 2 breaks on screen</span></pre>
+</div>
+</section>
+
+<!-- Leaky bucket -->
+<section id="leaky" style="padding-top:28px">
+<div class="algo">
+  <div class="algo-head"><h3>5 · Leaky bucket</h3><span class="who">used by: Shopify REST API, NGINX limit_req</span></div>
+  <p>Requests go into a fixed-size FIFO queue (the bucket). A worker takes them out at a <strong>constant</strong> rate (here 1 every 2 s), like water leaking from a hole. If the queue is full, new requests are dropped. However bursty the input is, the output is perfectly smooth.</p>
+  <div class="sim" data-sim="leaky"></div>
+  <div class="twocol">
+    <div class="pros"><h4>Pros</h4><ul><li>Smooth, predictable output, ideal in front of a fixed-capacity system</li><li>Memory is bounded by the queue size</li></ul></div>
+    <div class="cons"><h4>Cons</h4><ul><li>Bursts are delayed rather than served, which adds latency</li><li>Old requests at the front can starve fresh ones</li><li>Needs a worker or queue, not just a counter</li></ul></div>
+  </div>
+  <p class="muted" style="font-size:.9rem">Interview nuance: "leaky bucket" means two things. <em>As a queue</em> (shown here) it shapes traffic. <em>As a meter</em> it's a counter that drains at a fixed rate, which is the mirror image of token bucket. Shopify's API uses the meter form: a bucket of 40 that leaks 2 per second.</p>
+<pre class="code">on request:
+  if queue.size &gt;= CAPACITY: return 429
+  queue.push(request)
+
+worker (every 1 / RATE seconds):
+  req = queue.pop();  process(req)</pre>
+</div>
+</section>
+
+<!-- ============ COMPARE ============ -->
+<section id="compare">
+  <span class="eyebrow">Side by side</span>
+  <h2>Which one when</h2>
+  <div class="btns"><button class="attack" id="attackAll" type="button">Run edge attack on all five</button><button id="resetAll" type="button">Reset all</button></div>
+  <p class="note" id="attackAllNote">Scroll back up after firing to see how each algorithm handled the same traffic.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Algorithm</th><th>Memory / key</th><th>Bursts</th><th>Accuracy</th><th>Pick it when</th></tr></thead>
+    <tbody>
+      <tr><td>Fixed window</td><td class="t">1 int</td><td>2× at edges</td><td>Low near edges</td><td>Daily or monthly quotas where edge bursts don't matter</td></tr>
+      <tr><td>Sliding log</td><td class="t">N timestamps</td><td>None</td><td>Exact</td><td>Low limits that must be strict: login, OTP, password reset</td></tr>
+      <tr><td>Sliding counter</td><td class="t">2 ints</td><td>Smoothed</td><td>~Exact</td><td>Huge scale, edge or CDN level, memory matters</td></tr>
+      <tr><td>Token bucket</td><td class="t">2 values</td><td>Up to capacity</td><td>Exact average</td><td><strong>Default for APIs.</strong> Bursty clients, clear burst and average knobs</td></tr>
+      <tr><td>Leaky bucket</td><td class="t">Queue</td><td>Queued, then dropped</td><td>Exact, smooth</td><td>Protecting a fixed-rate downstream: SMS gateway, legacy DB, payment provider</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ HLD ============ -->
+<section id="hld">
+  <span class="eyebrow">Distributed design</span>
+  <h2>From one server to many</h2>
+  <p>With one server, a hashmap in memory is fine. With 10 servers behind a load balancer, each has its own hashmap, so a user gets 10× the limit. Counters must live in a <strong>shared, fast store</strong>. Redis is the standard answer: in memory, about a millisecond away, with atomic <code>INCR</code>, TTLs and Lua scripts.</p>
+  <div class="mermaid-box"><pre class="mermaid">
+flowchart LR
+  C[Clients] --> LB[Load balancer]
+  LB --> G1[Gateway 1<br/>rate limiter]
+  LB --> G2[Gateway 2<br/>rate limiter]
+  G1 -- "EVAL token_bucket.lua" --> R[(Redis cluster<br/>counters)]
+  G2 -- "EVAL token_bucket.lua" --> R
+  CFG[(Rules config)] -. "load + cache" .-> G1
+  CFG -. "load + cache" .-> G2
+  G1 -- allowed --> S[Backend services]
+  G2 -- allowed --> S
+  G1 -- blocked --> X[429 + Retry-After]
+</pre></div>
+  <div class="mermaid-box"><pre class="mermaid">
+sequenceDiagram
+  participant C as Client
+  participant G as Gateway
+  participant R as Redis
+  participant S as Service
+  C->>G: GET /orders (api-key=abc)
+  G->>G: find rule for key (local cache)
+  G->>R: EVAL token_bucket.lua rl:abc
+  R-->>G: allowed, remaining=3
+  G->>S: forward request
+  S-->>G: 200
+  G-->>C: 200 + X-RateLimit-Remaining: 3
+  Note over C,G: when tokens run out
+  G-->>C: 429 + Retry-After: 2
+</pre></div>
+  <h3>Problems this creates (the senior-level part)</h3>
+  <ul>
+    <li><strong>Race conditions:</strong> read-check-write from 2 servers lets both through. Fix it with a Lua script, which Redis runs atomically. See the stepper below.</li>
+    <li><strong>Latency:</strong> every request now makes a network hop. Keep Redis close, use one round trip (Lua), and pool connections.</li>
+    <li><strong>Redis goes down:</strong> <em>fail open</em> (allow everything, keeping the API up) or <em>fail closed</em> (reject everything, keeping the backend safe). Most public APIs fail open. A limit protecting money or a fragile system may fail closed. Say which and why.</li>
+    <li><strong>Clocks:</strong> app servers disagree on the time. Use one clock, either Redis's <code>TIME</code> inside the script or a single trusted source.</li>
+    <li><strong>Hot keys:</strong> one huge tenant hammers one Redis shard. Shard by key, and for giants keep a local pre-limit that syncs to Redis in batches.</li>
+    <li><strong>Multi-region:</strong> one global counter is slow. Use per-region limits (global ÷ regions) or sync asynchronously and accept a small overshoot.</li>
+  </ul>
+</section>
+
+<!-- ============ RACE ============ -->
+<section id="race">
+  <span class="eyebrow">The cliffhanger</span>
+  <h2>Two servers, one token</h2>
+  <p>A user has exactly <strong>1 token</strong> left. Two requests arrive at the same moment, one on each server. Step through it.</p>
+  <div class="btns">
+    <div class="seg" role="group" aria-label="Implementation">
+      <button type="button" id="mNaive" aria-pressed="true">GET then SET</button>
+      <button type="button" id="mLua" aria-pressed="false">Lua script</button>
+    </div>
+    <button type="button" class="primary" id="rNext">Next step</button>
+    <button type="button" id="rReset">Reset</button>
+  </div>
+  <div class="race">
+    <div id="rA"><span class="nm">Server A</span><span class="val" id="rAv">waiting</span></div>
+    <div id="rR"><span class="nm">Redis · tokens</span><span class="val" id="rRv">1</span></div>
+    <div id="rB"><span class="nm">Server B</span><span class="val" id="rBv">waiting</span></div>
+  </div>
+  <ol class="racelog" id="rLog"></ol>
+  <div class="callout"><strong>Try it in Part 2:</strong> on localhost the race window is microseconds. Adding a deliberate <code>sleep(5ms)</code> between GET and SET and firing 200 concurrent requests across 2 server processes makes it visible every time. Swap in a Lua script and the count drops to exactly the limit.</div>
+</section>
+
+<!-- ============ EXTRAS ============ -->
+<section id="extras">
+  <span class="eyebrow">Interview extras</span>
+  <h2>Follow-ups interviewers ask</h2>
+  <ul>
+    <li><strong>Limit by what?</strong> By IP, a whole office behind one NAT shares a limit. By user, logged-out traffic isn't covered. Real systems layer these: IP for anonymous traffic, API key or user for authenticated.</li>
+    <li><strong>Tiered limits:</strong> free gets 100/min, paid gets 1,000/min. Rules live in config, keyed by plan, and are cached in the gateway.</li>
+    <li><strong>Multiple rules:</strong> 10/sec <em>and</em> 10,000/day. Check all of them; any one can reject.</li>
+    <li><strong>What does the client do with a 429?</strong> Honour <code>Retry-After</code>, back off exponentially <em>with jitter</em>. Without jitter, every client retries at the same instant (links to the retry-storm video).</li>
+    <li><strong>Headers:</strong> <code>Retry-After</code> is standard (RFC 9110). <code>X-RateLimit-*</code> is a de-facto convention, and the IETF is standardising <code>RateLimit</code> headers in a draft.</li>
+    <li><strong>Hard vs soft limits:</strong> a soft limit lets a request through but logs or alerts. Useful when rolling out a new limit to see who would be hit.</li>
+    <li><strong>Observability:</strong> track the rejection rate per rule and per tenant. A sudden spike means either an attack or a limit set too low.</li>
+  </ul>
+</section>
+
+<!-- ============ BUILD ============ -->
+<section id="build">
+  <span class="eyebrow">Part 2</span>
+  <h2>Build plan</h2>
+  <p>Every algorithm implements the same interface, so they can be swapped and compared:</p>
+  <pre class="code">allow(key) → { allowed: bool, remaining: int, retryAfterSeconds: float }</pre>
+  <ol>
+    <li><strong>Five in-memory limiters</strong>, about 20 lines each, with unit tests that drive a fake clock (no sleeping in tests).</li>
+    <li><strong>Traffic replayer:</strong> the same request pattern (steady, burst, edge attack) into all five, printed as a side-by-side allowed/rejected chart. This is the money shot for the comparison.</li>
+    <li><strong>HTTP middleware:</strong> a tiny API that returns <code>429</code> plus the headers. Flood it with <code>hey</code> or <code>k6</code>.</li>
+    <li><strong>Move the token bucket to Redis</strong> the naive way: GET, compute, SET.</li>
+    <li><strong>Break it:</strong> 2 server processes behind NGINX, 200 concurrent requests, count the 200s, and get more than the limit.</li>
+    <li><strong>Fix it:</strong> a Lua script of about 15 lines. Rerun and the count equals the limit.</li>
+    <li><strong>Bonus break:</strong> the fixed-window <code>INCR</code> + <code>EXPIRE</code> crash bug. Kill the process between the two calls, and the key has no TTL, so the user is blocked forever.</li>
+    <li><strong>Bonus:</strong> kill Redis and show fail-open vs fail-closed behaviour.</li>
+  </ol>
+</section>
+
+<!-- ============ PART 1 OUTLINE ============ -->
+
+
+<footer>
+  <span>Sources: GitHub REST API rate-limit docs · Stripe engineering blog, "Scaling your API with rate limiters" (2017) · Cloudflare blog, "How we built rate limiting capable of scaling to millions of domains" (2017) · AWS API Gateway throttling docs · Shopify API rate-limit docs · NGINX <code>limit_req</code> docs · RFC 6585 (429) · RFC 9110 (Retry-After) · IETF draft-ietf-httpapi-ratelimit-headers.</span>
+  <span>Simulators run in your browser, using the rule 5 requests per 10 seconds. The traffic shown on load is a sample.</span>
+</footer>
+</div>
+
+<script>
+(function(){
+const W=10, LIMIT=5, CAP=5, RATE=LIMIT/W, SPAN=20, LEAK=1/RATE;
+const T0=performance.now()-22000; // clock starts at 22s so the timeline has history
+const now=()=> (performance.now()-T0)/1000;
+const fmt=t=>t.toFixed(1);
+
+const ALG={
+  fixed:{
+    title:"Fixed window",
+    init:()=>({ws:-1,count:0}),
+    roll(s,t){const ws=Math.floor(t/W)*W; if(ws!==s.ws){s.ws=ws;s.count=0;}},
+    req(s,t){this.roll(s,t); if(s.count<LIMIT){s.count++;return"ok";} return"bad";},
+    view(s,t){this.roll(s,t); return `<span>window ${fmt(s.ws)}–${fmt(s.ws+W)} s</span><span>count ${cells(s.count,LIMIT)} ${s.count}/${LIMIT}</span><span class="muted">resets in ${fmt(s.ws+W-t)} s</span>`;}
+  },
+  log:{
+    title:"Sliding log",
+    init:()=>({log:[]}),
+    prune(s,t){s.log=s.log.filter(x=>x>t-W);},
+    req(s,t){this.prune(s,t); if(s.log.length<LIMIT){s.log.push(t);return"ok";} return"bad";},
+    view(s,t){this.prune(s,t); const chips=s.log.map(x=>`<span class="chip">−${fmt(t-x)}s</span>`).join("")||'<span class="muted">empty</span>';
+      const next=s.log.length>=LIMIT?`<span class="muted">next slot in ${fmt(s.log[0]+W-t)} s</span>`:"";
+      return `<span>log ${s.log.length}/${LIMIT}</span><span>${chips}</span>${next}`;}
+  },
+  counter:{
+    title:"Sliding counter",
+    init:()=>({ws:-1,curr:0,prev:0}),
+    roll(s,t){const ws=Math.floor(t/W)*W; if(ws!==s.ws){s.prev=(ws-s.ws===W)?s.curr:0; s.curr=0; s.ws=ws;}},
+    est(s,t){return s.prev*(1-(t-s.ws)/W)+s.curr;},
+    req(s,t){this.roll(s,t); if(this.est(s,t)<LIMIT){s.curr++;return"ok";} return"bad";},
+    view(s,t){this.roll(s,t); const w=1-(t-s.ws)/W, e=this.est(s,t);
+      return `<span>prev ${s.prev} × ${(w*100).toFixed(0)}% + curr ${s.curr}</span><span>= <strong>${e.toFixed(2)}</strong> / ${LIMIT}</span><span class="${e>=LIMIT?'stat-bad':'stat-ok'}">${e>=LIMIT?'next → 429':'next → allowed'}</span>`;}
+  },
+  token:{
+    title:"Token bucket",
+    init:t=>({tokens:CAP,last:t}),
+    refill(s,t){s.tokens=Math.min(CAP,s.tokens+(t-s.last)*RATE); s.last=t;},
+    req(s,t){this.refill(s,t); if(s.tokens>=1){s.tokens-=1;return"ok";} return"bad";},
+    view(s,t){this.refill(s,t); const wait=s.tokens>=1?0:(1-s.tokens)/RATE;
+      return `<span>bucket ${cells(s.tokens,CAP)}</span><span>tokens ${s.tokens.toFixed(2)} / ${CAP}</span><span class="muted">+${RATE} per s${wait?` · next token in ${fmt(wait)} s`:""}</span>`;}
+  },
+  leaky:{
+    title:"Leaky bucket",
+    init:()=>({q:[],next:0}),
+    tick(s,t){while(s.q.length&&t>=s.next){const e=s.q.shift(); e.status="ok"; e.served=s.next; s.next+=LEAK;}},
+    req(s,t,e){this.tick(s,t); if(!s.q.length&&t>=s.next){s.next=t+LEAK; e.served=t; return"ok";}
+      if(s.q.length<CAP){s.q.push(e);return"queued";} return"bad";},
+    view(s,t){this.tick(s,t);
+      return `<span>queue ${cells(s.q.length,CAP,true)} ${s.q.length}/${CAP}</span><span class="muted">${s.q.length?`next drip in ${fmt(Math.max(0,s.next-t))} s`:"idle"} · drains 1 per ${LEAK} s</span>`;}
+  }
+};
+function cells(v,n,q){let h='<span class="cells">';for(let i=0;i<n;i++){const f=Math.max(0,Math.min(1,v-i));h+=`<span class="cell${q?' q':''}"><i style="height:${(f*100).toFixed(0)}%"></i></span>`;}return h+'</span>';}
+
+const sims=[];
+function build(el){
+  const kind=el.dataset.sim, a=ALG[kind];
+  el.innerHTML=`<div class="sim-top"><span class="sim-label">Simulator · ${a.title} · 5 per 10 s</span>
+    <div class="btns"><button type="button" class="primary" data-a="one">Send 1</button><button type="button" data-a="burst">Burst of 8</button><button type="button" class="attack" data-a="edge">Edge attack</button><button type="button" data-a="reset">Reset</button></div></div>
+    <canvas aria-label="${a.title} timeline of the last 20 seconds"></canvas>
+    <div class="state" aria-live="off"></div>
+    <div class="note"></div>`;
+  const s={kind,a,el,cv:el.querySelector("canvas"),stateEl:el.querySelector(".state"),note:el.querySelector(".note"),ev:[],st:null,timers:[]};
+  s.reset=()=>{s.timers.forEach(clearTimeout);s.timers=[];s.ev=[];s.st=a.init(now());s.note.textContent="";};
+  s.send=(t)=>{t=t??now(); const e={t,lane:0,status:null};
+    const near=s.ev.filter(x=>Math.abs(x.t-t)<0.45).length; e.lane=near%5;
+    e.status=a.req(s.st,t,e); s.ev.push(e); if(s.ev.length>300)s.ev.splice(0,100);};
+  s.edge=(B)=>{const t=now(); if(B==null){B=Math.ceil(t/W)*W; if(B-t<1.3)B+=W;}
+    [-.5,-.4,-.3,-.2,-.1,.1,.2,.3,.4,.5].forEach(d=>{s.timers.push(setTimeout(()=>s.send(),(B+d-now())*1000));});
+    s.note.textContent=`Edge attack armed: 5 requests just before t=${B}s, 5 just after.`;
+    s.timers.push(setTimeout(()=>{s.note.textContent=summary(s);},(B+0.8-now())*1000));
+    return B;};
+  el.addEventListener("click",ev=>{const b=ev.target.closest("button");if(!b)return;
+    const act=b.dataset.a;
+    if(act==="one")s.send();
+    if(act==="burst"){for(let i=0;i<8;i++)s.timers.push(setTimeout(()=>s.send(),i*60));}
+    if(act==="edge")s.edge();
+    if(act==="reset")s.reset();});
+  // sample traffic
+  s.st=a.init(0);
+  [1.0,1.3,1.6,4.0,8.6,9.0,9.2,9.4,9.6,10.2,10.4,10.6,10.8,11.0,15.5,18.0,18.3,18.6,18.9,19.2,19.5,21.0].forEach(t=>{if(a.tick)a.tick(s.st,t); s.send(t);});
+  sims.push(s);
+}
+function summary(s){const ok=s.ev.filter(e=>e.status==="ok").length,bad=s.ev.filter(e=>e.status==="bad").length,q=s.ev.filter(e=>e.status==="queued").length;
+  return `So far: ${ok} allowed, ${bad} rejected${q?`, ${q} waiting in queue`:""}.`;}
+
+document.querySelectorAll(".sim").forEach(build);
+document.getElementById("attackAll").addEventListener("click",()=>{let B=null; sims.forEach(s=>{B=s.edge(B);});
+  document.getElementById("attackAllNote").textContent=`Armed on all five for t=${B}s. Scroll up to watch each timeline.`;});
+document.getElementById("resetAll").addEventListener("click",()=>sims.forEach(s=>s.reset()));
+
+function draw(s,t,c){
+  const cv=s.cv, dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight;
+  if(!w)return;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  const L=6,R=w-14, base=h-24, top=10, t0=t-SPAN;
+  const X=v=>L+(v-t0)/SPAN*(R-L);
+  const shade=(a,b,col)=>{const x1=Math.max(L,X(a)),x2=Math.min(R,X(b)); if(x2>x1){g.fillStyle=col;g.fillRect(x1,top-4,x2-x1,base-top+4);}};
+  g.font="11px "+c.mono;
+  const st=s.st;
+  if(s.kind==="fixed"){shade(st.ws,st.ws+W,c.cyanSoft);}
+  if(s.kind==="log"){shade(t-W,t,c.violetSoft); g.fillStyle=c.violet; g.fillText("last 10 s",X(t-W)+4,top+8);}
+  if(s.kind==="counter"){shade(st.ws,t,c.cyanSoft); shade(t-W,st.ws,c.violetSoft); g.fillStyle=c.violet; const wt=1-(t-st.ws)/W;
+    if(X(st.ws)-X(t-W)>60)g.fillText(`prev × ${(wt*100).toFixed(0)}%`,X(t-W)+4,top+8);}
+  // window boundaries
+  g.strokeStyle=c.line; g.setLineDash([3,4]); g.lineWidth=1;
+  for(let b=Math.ceil(t0/W)*W;b<=t;b+=W){const x=X(b); g.beginPath(); g.moveTo(x,top-4); g.lineTo(x,base); g.stroke();}
+  g.setLineDash([]);
+  // axis
+  g.strokeStyle=c.line; g.beginPath(); g.moveTo(L,base); g.lineTo(R,base); g.stroke();
+  g.fillStyle=c.muted;
+  for(let k=Math.ceil(t0/5)*5;k<=t;k+=5){const x=X(k); g.fillRect(x,base,1,4); g.fillText(k+"s",Math.min(x-8,R-28),base+16);}
+  g.fillStyle=c.cyan; g.fillRect(R,top-4,2,base-top+4);
+  // events
+  const laneY=l=>base-12-l*15;
+  for(const e of s.ev){ if(e.t<t0-1 && !(e.served && e.served>t0))continue;
+    const x=X(e.t), y=laneY(e.lane);
+    if(e.status==="bad"){g.strokeStyle=c.bad; g.lineWidth=2; g.beginPath(); g.moveTo(x-4,y-4);g.lineTo(x+4,y+4);g.moveTo(x+4,y-4);g.lineTo(x-4,y+4); g.stroke();}
+    else if(s.kind==="leaky" && (e.status==="queued" || (e.served!=null && e.served-e.t>0.05))){
+      g.strokeStyle=c.warn; g.lineWidth=2; g.beginPath(); g.arc(x,y,4.5,0,7); g.stroke();
+      if(e.status==="ok"){const xs=X(Math.min(e.served,t)); g.setLineDash([2,3]); g.beginPath(); g.moveTo(x+5,y); g.lineTo(xs-5,y); g.stroke(); g.setLineDash([]);
+        g.fillStyle=c.ok; g.beginPath(); g.arc(xs,y,4.5,0,7); g.fill();}
+      else {g.setLineDash([2,3]); g.beginPath(); g.moveTo(x+5,y); g.lineTo(R,y); g.stroke(); g.setLineDash([]);}
+    }
+    else {g.fillStyle=c.ok; g.beginPath(); g.arc(x,y,4.5,0,7); g.fill();}
+  }
+}
+function colors(){const cs=getComputedStyle(document.documentElement),v=n=>cs.getPropertyValue(n).trim();
+  return {ok:v("--ok"),bad:v("--bad"),warn:v("--warn"),cyan:v("--cyan"),violet:v("--violet"),line:v("--line"),muted:v("--muted"),cyanSoft:v("--cyan-soft"),violetSoft:v("--violet-soft"),mono:v("--f-mono")};}
+let lastState=0;
+function frame(){const t=now(), c=colors(), doState=performance.now()-lastState>120;
+  for(const s of sims){ if(s.a.tick)s.a.tick(s.st,t); draw(s,t,c); if(doState)s.stateEl.innerHTML=s.a.view(s.st,t);}
+  if(doState)lastState=performance.now();
+  requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+
+// ---- race stepper ----
+const STEPS={
+  naive:[
+    {who:"A",txt:"Server A: GET tokens → 1",redis:1,A:"sees 1"},
+    {who:"B",txt:"Server B: GET tokens → 1  (A hasn't written yet)",redis:1,B:"sees 1"},
+    {who:"A",txt:"Server A: 1 ≥ 1 → allow, SET tokens 0",redis:0,A:"200 OK"},
+    {who:"B",txt:"Server B: 1 ≥ 1 → allow, SET tokens 0",redis:0,B:"200 OK"},
+    {end:true,txt:"Result: 2 requests allowed, only 1 token existed. The limit is broken.",bad:true}
+  ],
+  lua:[
+    {who:"A",txt:"Server A: EVAL take_token.lua → Redis runs the whole script with nothing in between: read 1, write 0, return allow",redis:0,A:"200 OK"},
+    {who:"B",txt:"Server B: EVAL take_token.lua (it waited for A's script) → read 0, return reject",redis:0,B:"429"},
+    {end:true,txt:"Result: 1 allowed, 1 rejected. Correct. Redis runs one script at a time, so the read and write can't be split.",bad:false}
+  ]
+};
+let mode="naive", idx=0;
+const $=id=>document.getElementById(id);
+function rReset(){idx=0; $("rAv").textContent="waiting"; $("rBv").textContent="waiting"; $("rRv").textContent="1"; $("rLog").innerHTML="";
+  ["rA","rB","rR"].forEach(i=>$(i).classList.remove("active")); $("rNext").disabled=false;}
+function rNext(){const st=STEPS[mode][idx]; if(!st)return;
+  ["rA","rB","rR"].forEach(i=>$(i).classList.remove("active"));
+  const li=document.createElement("li"); li.textContent=st.txt;
+  if(st.end){li.className="result"; li.style.color=st.bad?"var(--bad)":"var(--ok)"; $("rNext").disabled=true;}
+  else{$("r"+st.who).classList.add("active"); $("rR").classList.add("active"); $("rRv").textContent=st.redis;
+    if(st.A)$("rAv").textContent=st.A; if(st.B)$("rBv").textContent=st.B;}
+  $("rLog").appendChild(li); idx++;}
+function setMode(m){mode=m; $("mNaive").setAttribute("aria-pressed",m==="naive"); $("mLua").setAttribute("aria-pressed",m==="lua"); rReset();}
+$("rNext").addEventListener("click",rNext); $("rReset").addEventListener("click",rReset);
+$("mNaive").addEventListener("click",()=>setMode("naive")); $("mLua").addEventListener("click",()=>setMode("lua"));
+rNext(); rNext(); // open with two steps shown
+})();
+</script>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs"; mermaid.initialize({startOnLoad:true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default"});</script>
+</body>
+</html>
