@@ -8,7 +8,7 @@ Every topic follows the same format: **theory → design → build → break it*
 
 | # | Topic | Notes | Boards | Code |
 |---|---|---|---|---|
-| 01 | [Rate limiter](01-rate-limiter/) | [study notes](01-rate-limiter/README.md) | [18 boards](01-rate-limiter/boards/) | coming in Part 2 |
+| 01 | [Rate limiter](01-rate-limiter/) | [study notes](01-rate-limiter/README.md) · [live simulators](https://param4.github.io/system-design-with-param/01-rate-limiter/interactive/study-guide.html) | [18 boards](01-rate-limiter/boards/) | coming in Part 2 |
 
 ## How each folder is laid out
 
@@ -18,7 +18,7 @@ Every topic follows the same format: **theory → design → build → break it*
 ├── boards/                    every whiteboard as PNG, "initial" and "final"
 │   └── rate-limiter-boards.excalidraw
 └── interactive/
-    └── study-guide.html       simulators you can click (open in a browser)
+    └── study-guide.html       simulators you can click (also live on GitHub Pages)
 ```
 
 ## Using the whiteboards

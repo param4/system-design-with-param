@@ -6,6 +6,8 @@
 
 The five algorithms are taught as a chain. **Each one exists because the previous one breaks.**
 
+**▶ [Try the live simulators](https://param4.github.io/system-design-with-param/01-rate-limiter/interactive/study-guide.html)**: send requests, fire an edge attack, and step through the race condition.
+
 ---
 
 ## What a rate limiter is
