@@ -42,6 +42,8 @@ Every rule has three parts:
 - **Reject** when a human is waiting or the caller can retry.
 - **Queue** when the work must happen eventually and nobody is waiting, such as emails, webhooks or batch payouts.
 
+Example: in a flash sale, rejecting orders over the limit loses money. Instead, put them in a queue and reply `202 Accepted` ("got it, processing shortly"), and let a worker process them at a safe rate. Keep the queue size capped; when it's full, fall back to 429.
+
 Related terms: *rate limiting* rejects a client over its quota. *Throttling* slows a client down. *Load shedding* drops requests when the server itself is overloaded.
 
 ## Where the limiter lives
