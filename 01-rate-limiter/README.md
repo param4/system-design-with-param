@@ -28,7 +28,7 @@ Every rule has three parts:
 | **How many** | 100 |
 | **Per how long** | per minute |
 
-![Anatomy of a rule](boards/05-anatomy-of-a-rule-final.png)
+![Anatomy of a rule](boards/04-anatomy-of-a-rule-final.png)
 
 **Example: OTP over SMS.** There's no user ID before login, so the key is the **phone number**: 1 OTP per 30 s, at most 5 per hour. Real systems also limit per IP and set a global daily budget. Otherwise an attacker loops through thousands of numbers, each staying under its own limit, and you pay the SMS bill. That fraud is called *SMS pumping*.
 
@@ -38,26 +38,15 @@ Every rule has three parts:
 - control costs (SMS, LLM tokens, payment APIs all charge per call)
 - slow down attackers
 
-### Over the limit: reject, queue, or delay?
-
-![Over the limit: 3 choices](boards/04-over-the-limit-3-choices-final.png)
-
-| Choice | Response | Use it when | Example |
-|---|---|---|---|
-| **Reject** | `429 Too Many Requests` + `Retry-After` | a human is waiting, or the client can retry | OTP, login, public APIs |
-| **Queue** | `202 Accepted`, processed later by a worker | the work must happen and nobody is waiting on it | flash-sale orders, emails, webhooks |
-| **Delay** | hold briefly, then serve | small bursts you'd rather smooth than drop | Nginx `limit_req` with `burst` |
-
-- **429 vs 503:** 429 means *you* (this client) sent too many. 503 means the server itself is overloaded for everyone.
-- **`Retry-After`:** tells the client how long to wait. Good clients wait that long and back off exponentially with jitter.
-- **Queuing isn't free:** the queue fills up, uses memory and adds latency. Cap its size, and when it's full, reject with 429 anyway. Queuing postpones rejection; it doesn't replace it.
-- **Only queue async work:** in a synchronous API, holding the HTTP connection open while a request waits uses up the very server capacity you're protecting.
+**Reject or queue?**
+- **Reject** when a human is waiting or the caller can retry.
+- **Queue** when the work must happen eventually and nobody is waiting, such as emails, webhooks or batch payouts.
 
 Related terms: *rate limiting* rejects a client over its quota. *Throttling* slows a client down. *Load shedding* drops requests when the server itself is overloaded.
 
 ## Where the limiter lives
 
-![Where the limiter lives](boards/06-where-the-limiter-lives-final.png)
+![Where the limiter lives](boards/05-where-the-limiter-lives-final.png)
 
 | Place | Verdict | Why |
 |---|---|---|
@@ -79,13 +68,13 @@ count = INCR key        # atomic in Redis
 allow = count <= LIMIT
 ```
 
-![Fixed window counter](boards/07-fixed-window-counter-final.png)
+![Fixed window counter](boards/06-fixed-window-counter-final.png)
 
 ### The bug: the edge attack
 
 The limit is 100 per minute. A client sends 100 requests at 0:59 and 100 more at 1:01. Each window sees exactly 100, so all 200 pass, within 2 seconds. **The worst case is 2× the limit in any 60-second span**, because the counter forgets everything at the boundary.
 
-![The edge attack](boards/08-the-edge-attack-final.png)
+![The edge attack](boards/07-the-edge-attack-final.png)
 
 | Pros | Cons |
 |---|---|
@@ -103,7 +92,7 @@ Worked example, limit 3 per 2 s, requests at 0.3, 0.8, 1.6, 2.5, 2.9 and 3.4 s:
 - 0.3 s and 0.8 s fall out of the window as time moves on.
 - At 3.4 s the window [1.4, 3.4] already holds **1.6, 2.5, 2.9**. That's 3, so the request is **rejected**.
 
-![Sliding window log](boards/09-sliding-window-log-final.png)
+![Sliding window log](boards/08-sliding-window-log-final.png)
 
 | Pros | Cons |
 |---|---|
@@ -124,7 +113,7 @@ estimate = previous × (overlap % of previous window) + current
 
 Limit 10 per minute, 8 requests in the previous minute, 3 so far in this one, 25% into the current minute: 8 × 75% + 3 = **9 → allowed**.
 
-![Sliding window counter](boards/10-sliding-window-counter-final.png)
+![Sliding window counter](boards/09-sliding-window-counter-final.png)
 
 It assumes the previous window's requests were evenly spread. Cloudflare reported that only **0.003% of 400 million requests** were wrongly allowed or limited with this approach.
 
@@ -139,7 +128,7 @@ It assumes the previous window's requests were evenly spread. Cloudflare reporte
 
 A bucket holds up to **capacity** tokens and is refilled at a **fixed rate**. Each request takes one token. An empty bucket means 429. Capacity sets the largest burst, and the refill rate sets the long-run average. Used by Stripe and AWS API Gateway.
 
-![Token bucket](boards/11-token-bucket-final.png)
+![Token bucket](boards/10-token-bucket-final.png)
 
 ### Lazy refill: no timer
 
@@ -158,7 +147,7 @@ Capacity 5, refill 1 token per second:
 | 3 s | 2.5 s | 3 | 1 request ✓ | 2 |
 | 20 s | 17 s | min(5, 19) = 5 | – | 5 |
 
-![Lazy refill](boards/12-lazy-refill-final.png)
+![Lazy refill](boards/11-lazy-refill-final.png)
 
 | Pros | Cons |
 |---|---|
@@ -169,7 +158,7 @@ Capacity 5, refill 1 token per second:
 
 Requests join a fixed-size **queue**, and a worker takes them out at a **constant rate**. Bursty in, smooth out. If the queue is full, the request is dropped. Think of an overhead water tank feeding a shower. Used by Shopify's API and Nginx `limit_req`.
 
-![Leaky bucket](boards/13-leaky-bucket-final.png)
+![Leaky bucket](boards/12-leaky-bucket-final.png)
 
 | Pros | Cons |
 |---|---|
@@ -182,7 +171,7 @@ Requests join a fixed-size **queue**, and a worker takes them out at a **constan
 
 ## Which one when
 
-![Which one fits?](boards/14-which-one-fits-final.png)
+![Which one fits?](boards/13-which-one-fits-final.png)
 
 | Scenario | Pick | Not this | Why not |
 |---|---|---|---|
@@ -190,13 +179,13 @@ Requests join a fixed-size **queue**, and a worker takes them out at a **constan
 | Public API (Stripe-style) | token bucket | leaky bucket | users would wait in a queue |
 | Calling a bank API capped at 50 TPS | leaky bucket | fixed window | an edge burst gets you blocked |
 
-![Cheat sheet](boards/15-cheat-sheet-final.png)
+![Cheat sheet](boards/14-cheat-sheet-final.png)
 
 ## Going distributed
 
 With 2+ servers behind a load balancer, per-server counters give a user N × the limit. Move the counters to a **shared store**. Redis is in-memory, fast, supports TTLs, and has atomic `INCR` and Lua scripts. Sticky sessions also work but hurt scaling and failover.
 
-![Going distributed](boards/16-going-distributed-final.png)
+![Going distributed](boards/15-going-distributed-final.png)
 
 ```mermaid
 flowchart LR
@@ -212,7 +201,7 @@ flowchart LR
 
 ## Interview extras
 
-![Interview extras](boards/17-interview-extras-final.png)
+![Interview extras](boards/16-interview-extras-final.png)
 
 - **Tell the client:** `Retry-After` (standard, RFC 9110), plus the de facto `X-RateLimit-Limit` and `X-RateLimit-Remaining`.
 - **Redis goes down:** you either **fail open** (allow all; the API stays up, at some risk) or **fail closed** (reject all; the backend is safe but the API is down). Most public APIs fail open, and money-critical paths fail closed. Say which you'd pick and why.
@@ -224,7 +213,7 @@ flowchart LR
 
 A user has 1 token left. Two requests hit two servers at the same moment. Both read `tokens = 1` from Redis before either writes, so both allow. **1 token, 2 requests.** You'll never see this in local testing.
 
-![Two servers, one token](boards/18-two-servers-one-token-final.png)
+![Two servers, one token](boards/17-two-servers-one-token-final.png)
 
 The fix is to do the read-check-write as **one atomic Lua script** inside Redis. That's Part 2, where we write it in Node.js and break it on camera first.
 
