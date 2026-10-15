@@ -6,7 +6,7 @@
 <title>Rate Limiter Field Guide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: single reading column (~820px) with full-bleed simulator panels; brand = navy + cyan + violet */
 :root{
@@ -36,6 +36,9 @@ h3{font-size:1.25rem;font-weight:700}
 p{margin:0}
 .eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
 .muted{color:var(--muted)}
+mark{background:var(--violet-soft);color:inherit;padding:0 3px;border-radius:3px}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:2px;white-space:nowrap}
+
 .stack{display:flex;flex-direction:column;gap:14px}
 section{display:flex;flex-direction:column;gap:18px;padding-top:56px}
 code,.mono{font-family:var(--f-mono);font-size:.88em}
@@ -105,6 +108,7 @@ figure{margin:0;display:flex;flex-direction:column;gap:8px}
 figure .fig{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto}
 figcaption{font-size:.85rem;color:var(--muted)}
 svg text{font-family:var(--f-mono)}
+.fig svg[aria-label*="reject or queue"] text{font-family:"Kalam",cursive}
 
 .race{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .race>div{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:12px;text-align:center;display:flex;flex-direction:column;gap:6px;min-width:0;transition:border-color .2s}
@@ -172,6 +176,30 @@ footer{margin-top:64px;font-size:.8rem;color:var(--muted);display:flex;flex-dire
     <li><strong>Security:</strong> it slows brute-force attacks, such as login attempts and OTP guessing.</li>
   </ul>
   <p class="muted">Related terms you'll be asked to tell apart: <strong>rate limiting</strong> rejects a client over its quota, <strong>throttling</strong> slows a client down, and <strong>load shedding</strong> drops requests when the server itself is overloaded, whoever sent them.</p>
+  <h3>Over the limit: reject or queue?</h3>
+  <figure>
+    <div class="fig" style="background:#ffffff"><svg style="width:100%;height:auto;display:block;font-family:Kalam,cursive" viewBox="0 0 680 320" role="img" aria-label="Over the limit: reject or queue end"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6"/></marker></defs><ellipse cx="70.0" cy="40.0" rx="14.0" ry="14.0" fill="none" stroke="#1e1e1e" stroke-width="2"/><polyline points="70,54 70,94" fill="none" stroke="#1e1e1e" stroke-width="1.6"/><polyline points="50,70 90,70" fill="none" stroke="#1e1e1e" stroke-width="1.6"/><polyline points="55,122 70,94 85,122" fill="none" stroke="#1e1e1e" stroke-width="1.6"/><text x="70" y="144" text-anchor="middle" font-size="12" fill="#1e1e1e">Users</text><polyline points="110,66 226,84" fill="none" stroke="#e8590c" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="110,77 226,90" fill="none" stroke="#e8590c" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="110,88 226,96" fill="none" stroke="#e8590c" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="110,99 226,102" fill="none" stroke="#e8590c" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="110,110 226,108" fill="none" stroke="#e8590c" stroke-width="1.6" marker-end="url(#ah)"/><text x="165" y="52" text-anchor="middle" font-size="12" fill="#e8590c">many requests</text><g><rect x="230" y="66" width="170" height="60" rx="8" fill="#d0bfff" stroke="#6741d9" stroke-width="1.5"/><text x="315.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#6741d9">Rate limiter</text><text x="315.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#6741d9" opacity=".8">100 req/min</text></g><g><rect x="510" y="66" width="150" height="60" rx="8" fill="#96f2d7" stroke="#099268" stroke-width="1.5"/><text x="585.0" y="87.0" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#099268">Server</text><text x="585.0" y="107.0" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#099268" opacity=".8">protected</text></g><polyline points="400,96 506,96" fill="none" stroke="#2f9e44" stroke-width="1.6" marker-end="url(#ah)"/><text x="453" y="86" text-anchor="middle" font-size="12" fill="#2f9e44">under limit</text><polyline points="290,126 290,160 240,160 240,196" fill="none" stroke="#e03131" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="340,126 340,160 440,160 440,196" fill="none" stroke="#f08c00" stroke-width="1.6" marker-end="url(#ah)"/><text x="340" y="180" text-anchor="middle" font-size="12" fill="#868e96">over limit: pick one</text><g><rect x="150" y="200" width="180" height="56" rx="8" fill="#ffc9c9" stroke="#e03131" stroke-width="1.5"/><text x="240.0" y="219.0" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#e03131">Reject</text><text x="240.0" y="239.0" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#e03131" opacity=".8">429 + Retry-After</text></g><g><rect x="360" y="200" width="160" height="56" rx="8" fill="#ffec99" stroke="#f08c00" stroke-width="1.5"/><text x="440.0" y="219.0" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#f08c00">Queue</text><text x="440.0" y="239.0" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#f08c00" opacity=".8">202 Accepted</text></g><g><rect x="540" y="200" width="120" height="56" rx="8" fill="#96f2d7" stroke="#099268" stroke-width="1.5"/><text x="600.0" y="219.0" text-anchor="middle" dominant-baseline="central" font-size="14" fill="#099268">Worker</text><text x="600.0" y="239.0" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#099268" opacity=".8">safe rate</text></g><polyline points="520,228 536,228" fill="none" stroke="#f08c00" stroke-width="1.6" marker-end="url(#ah)"/><polyline points="600,200 600,130" fill="none" stroke="#099268" stroke-width="1.6" marker-end="url(#ah)"/><text x="240" y="280" text-anchor="middle" font-size="12" fill="#1e1e1e">user waiting: OTP, login, APIs</text><text x="510" y="280" text-anchor="middle" font-size="12" fill="#1e1e1e">async work: orders, emails, webhooks</text><text x="510" y="304" text-anchor="middle" font-size="12" fill="#e03131">queue full → 429 anyway</text></svg></div>
+    <figcaption>Under the limit, requests go straight to the server. Over it, you either reject with 429 or queue the work for a worker that drains at a safe rate.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Reject</strong> (<code>429</code> + <code>Retry-After</code>) when a human is waiting or the client can retry: OTP, login, public APIs.</li>
+    <li><strong>Queue</strong> (<code>202 Accepted</code>) when the work must happen but nobody is waiting on it: flash-sale orders, emails, webhooks, batch payouts.</li>
+  </ul>
+  <p><strong>How the queue path works:</strong></p>
+  <ol>
+    <li>The limiter sees the request is over the limit, pushes it as a job onto a queue (Redis list or stream, SQS, Kafka) and replies <code>202 Accepted</code> with a job ID.</li>
+    <li>A worker pulls jobs at the rate the downstream can take. That worker is a leaky bucket.</li>
+    <li>The client polls <code>GET /jobs/:id</code>, or gets a webhook when the job is done.</li>
+  </ol>
+  <p><strong>Rules that keep it safe:</strong></p>
+  <ul>
+    <li><mark>Cap the queue. When it's full, reply 429 anyway: a queue postpones rejection, it doesn't replace it.</mark><span class="imp">IMP</span></li>
+    <li><mark>Only queue async work.</mark><span class="imp">IMP</span> Holding a synchronous HTTP request open while it waits uses up the server capacity you're protecting.</li>
+    <li><strong>Expire stale jobs.</strong> Give every job a deadline, so a two-hour-old "send OTP" never fires.</li>
+    <li><strong>Make jobs idempotent.</strong> Retries plus a queue means duplicates, so use an idempotency key.</li>
+  </ul>
+  <p>Example: in a flash sale, rejecting orders over the limit loses money. Queue them, reply "got it, processing shortly", and let a worker place them at a rate the payment provider allows.</p>
+
 </section>
 
 <!-- ============ REQUIREMENTS ============ -->
@@ -348,7 +376,7 @@ allow(key, now):
 <div class="algo">
   <div class="algo-head"><h3>4 · Token bucket</h3><span class="who">used by: Stripe, AWS API Gateway</span></div>
   <p>A bucket holds up to <strong>capacity</strong> tokens (here 5). Tokens drip in at a fixed <strong>refill rate</strong> (here 0.5 per second). Each request takes one token, and an empty bucket means 429. The capacity sets the largest allowed burst and the refill rate sets the long-run average.</p>
-  <p><strong>Key implementation insight:</strong> there's no background timer adding tokens. Store <code>tokens</code> and <code>last_refill</code>, and on each request compute the refill as <code>(now − last) × rate</code>. That's two numbers per key and no cron job. Say this in the video, because most explainers skip it.</p>
+  <p><strong>Key implementation insight:</strong> there's no background timer adding tokens. <mark>Store <code>tokens</code> and <code>last_refill</code>, and on each request compute the refill as <code>(now − last) × rate</code>. That's two numbers per key and no cron job.</mark><span class="imp">IMP</span></p>
   <div class="sim" data-sim="token"></div>
   <div class="twocol">
     <div class="pros"><h4>Pros</h4><ul><li>Allows short bursts, which is how real clients behave</li><li>Two values per key</li><li>Two knobs that are easy to reason about: burst and average</li><li>The default choice for public APIs</li></ul></div>

@@ -38,11 +38,25 @@ Every rule has three parts:
 - control costs (SMS, LLM tokens, payment APIs all charge per call)
 - slow down attackers
 
-**Reject or queue?**
-- **Reject** when a human is waiting or the caller can retry.
-- **Queue** when the work must happen eventually and nobody is waiting, such as emails, webhooks or batch payouts.
+### Over the limit: reject or queue?
 
-Example: in a flash sale, rejecting orders over the limit loses money. Instead, put them in a queue and reply `202 Accepted` ("got it, processing shortly"), and let a worker process them at a safe rate. Keep the queue size capped; when it's full, fall back to 429.
+![Users send many requests to a rate limiter; under the limit they reach the server, over it they are either rejected with 429 or queued for a worker](images/reject-or-queue.png)
+
+- **Reject** (`429` + `Retry-After`) when a human is waiting or the client can retry: OTP, login, public APIs.
+- **Queue** (`202 Accepted`) when the work must happen but nobody is waiting on it: flash-sale orders, emails, webhooks, batch payouts.
+
+**How the queue path works**
+1. The limiter sees the request is over the limit, pushes it as a job onto a queue (Redis list or stream, SQS, Kafka) and replies `202 Accepted` with a job ID.
+2. A worker pulls jobs at the rate the downstream can take. That worker is a leaky bucket (see [section 5](#5-leaky-bucket)).
+3. The client polls `GET /jobs/:id`, or gets a webhook when the job is done.
+
+**Rules that keep it safe**
+- **Cap the queue. When it's full, reply 429 anyway: a queue postpones rejection, it doesn't replace it.** `IMP`
+- **Only queue async work.** `IMP` Holding a synchronous HTTP request open while it waits uses up the server capacity you're protecting.
+- **Expire stale jobs.** Give every job a deadline, so a two-hour-old "send OTP" never fires.
+- **Make jobs idempotent.** Retries plus a queue means duplicates, so use an idempotency key.
+
+Example: in a flash sale, rejecting orders over the limit loses money. Queue them, reply "got it, processing shortly", and let a worker place them at a rate the payment provider allows.
 
 Related terms: *rate limiting* rejects a client over its quota. *Throttling* slows a client down. *Load shedding* drops requests when the server itself is overloaded.
 
@@ -134,7 +148,7 @@ A bucket holds up to **capacity** tokens and is refilled at a **fixed rate**. Ea
 
 ### Lazy refill: no timer
 
-Don't run a background job that adds tokens to millions of buckets. Store just **two numbers per key**, `tokens` and `last_time`, and compute the refill when a request arrives:
+Don't run a background job that adds tokens to millions of buckets. **Store just two numbers per key, `tokens` and `last_time`, and compute the refill when a request arrives.** `IMP`
 
 ```
 tokens = min(capacity, tokens + (now - last_time) * rate)
@@ -217,7 +231,7 @@ A user has 1 token left. Two requests hit two servers at the same moment. Both r
 
 ![Two servers, one token](boards/17-two-servers-one-token-final.png)
 
-The fix is to do the read-check-write as **one atomic Lua script** inside Redis. That's Part 2, where we write it in Node.js and break it on camera first.
+The fix is to do the read-check-write as **one atomic Lua script** inside Redis. That's Part 2, where we write it in Node.js, break it first, then fix it.
 
 ---
 
