@@ -97,7 +97,25 @@ The limit is 100 per minute. A client sends 100 requests at 0:59 and 100 more at
 | 1 integer per user | 2× burst at window edges |
 | `INCR` is atomic and fast | everyone's window resets at :00 (thundering herd) |
 
-> Redis gotcha: `INCR` then `EXPIRE` is two commands. If the process crashes between them, the key never expires and the user is blocked forever. Use `SET key 0 EX <window> NX` before `INCR`, or a Lua script.
+### Redis gotcha: the key that never expires
+
+The usual fixed-window code is two separate commands:
+
+```
+count = INCR user42:10:01            # creates the key at 1, with no expiry yet
+if count == 1: EXPIRE user42:10:01 60
+```
+
+If the app crashes or restarts right after `INCR`, `EXPIRE` never runs. The key now has **no TTL**: it never resets, the count only grows, and after 100 requests user42 gets 429 **forever**, until someone deletes the key by hand.
+
+**Fix:** create the key with its expiry in one command, then increment:
+
+```
+SET  user42:10:01 0 EX 60 NX         # only if missing, and with a TTL in the same command
+INCR user42:10:01                    # INCR keeps the existing TTL
+```
+
+A crash between these two is harmless, because the key already has its TTL. Or do `INCR` + `EXPIRE` together in one Lua script, which Redis runs as one atomic step.
 
 ## 2. Sliding window log
 
