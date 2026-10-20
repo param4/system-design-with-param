@@ -1,5 +1,7 @@
 # 01 · Rate limiter
 
+**▶ Watch the video:** [Design a Rate Limiter | System Design Interview | 5 Strategies (Hindi)](https://www.youtube.com/watch?v=J5wziH5OAZM)
+
 > Part 1 of the video: **design**. Part 2 builds all five algorithms in Node.js, runs them on Redis across two servers, breaks them, and fixes them.
 
 **Contents:** [What it is](#what-a-rate-limiter-is) · [Where it lives](#where-the-limiter-lives) · [Fixed window](#1-fixed-window-counter) · [Sliding log](#2-sliding-window-log) · [Sliding counter](#3-sliding-window-counter) · [Token bucket](#4-token-bucket) · [Leaky bucket](#5-leaky-bucket) · [Which one when](#which-one-when) · [Distributed](#going-distributed) · [Interview extras](#interview-extras) · [The race condition](#the-bug-two-servers-one-token)
