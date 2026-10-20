@@ -135,7 +135,31 @@ Worked example, limit 3 per 2 s, requests at 0.3, 0.8, 1.6, 2.5, 2.9 and 3.4 s:
 
 Interview question: should *rejected* requests be logged too? If yes, a client that keeps hammering stays blocked. That's harsher on abusers and also harsher on normal users.
 
-In Redis this is a sorted set: `ZREMRANGEBYSCORE`, `ZCARD`, `ZADD`. Check-then-add is a race across servers, so it needs a Lua script.
+### In Redis: a sorted set per user
+
+The score of each entry is the request's timestamp. Limit 100 per 60 s:
+
+```
+ZREMRANGEBYSCORE user42 0 (now - 60)    # drop entries older than the window
+ZCARD user42                            # how many are left? say 99
+ZADD user42 now req-id                  # 99 < 100, so record this request
+EXPIRE user42 60
+```
+
+**The race:** two servers handle user42 at the same moment. Both run `ZCARD`, both see 99, both decide "one slot left", and both `ZADD`. The set now holds 101, so the limit is broken. With 10 servers it can overshoot by up to 9.
+
+**Fix:** run the check and the add as one Lua script. Redis runs it start to finish with nothing in between:
+
+```lua
+-- KEYS[1] = user key, ARGV = now (s), window (s), limit, unique request id
+redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1] - ARGV[2])
+if redis.call('ZCARD', KEYS[1]) < tonumber(ARGV[3]) then
+  redis.call('ZADD', KEYS[1], ARGV[1], ARGV[4])
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+  return 1
+end
+return 0
+```
 
 ## 3. Sliding window counter
 
