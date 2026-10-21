@@ -108,7 +108,10 @@ count = INCR user42:10:01            # creates the key at 1, with no expiry yet
 if count == 1: EXPIRE user42:10:01 60
 ```
 
-If the app crashes or restarts right after `INCR`, `EXPIRE` never runs. The key now has **no TTL**: it never resets, the count only grows, and after 100 requests user42 gets 429 **forever**, until someone deletes the key by hand.
+If the app crashes or restarts right after `INCR`, `EXPIRE` never runs. The key now has **no TTL**:
+
+- **Key has the window number** (like `user42:10:01`): the next minute uses a new key, so the user is fine. But the old key stays in Redis **forever**. Millions of these leak memory until Redis fills up.
+- **Key is just `user42`** (the window starts at the first request): the key never resets, the count only grows, and after 100 requests user42 gets 429 **forever**, until someone deletes the key by hand.
 
 **Fix:** create the key with its expiry in one command, then increment:
 

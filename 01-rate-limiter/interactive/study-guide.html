@@ -305,7 +305,7 @@ allow(key, now):
   win   = floor(now / W)
   k     = key + ":" + win
   count = INCR(k)                 <span class="c">// atomic</span>
-  if count == 1: EXPIRE(k, W)     <span class="w">// ⚠ crash between INCR and EXPIRE → key never expires → user blocked forever</span>
+  if count == 1: EXPIRE(k, W)     <span class="w">// ⚠ crash between INCR and EXPIRE → key never expires → leaks memory (key without window number: user blocked forever)</span>
   return count &lt;= LIMIT</pre>
 </div>
 </section>
@@ -525,7 +525,7 @@ sequenceDiagram
     <li><strong>Move the token bucket to Redis</strong> the naive way: GET, compute, SET.</li>
     <li><strong>Break it:</strong> 2 server processes behind NGINX, 200 concurrent requests, count the 200s, and get more than the limit.</li>
     <li><strong>Fix it:</strong> a Lua script of about 15 lines. Rerun and the count equals the limit.</li>
-    <li><strong>Bonus break:</strong> the fixed-window <code>INCR</code> + <code>EXPIRE</code> crash bug. Kill the process between the two calls, and the key has no TTL, so the user is blocked forever.</li>
+    <li><strong>Bonus break:</strong> the fixed-window <code>INCR</code> + <code>EXPIRE</code> crash bug. Kill the process between the two calls, and the key has no TTL. With the window number in the key, it leaks memory forever. With just <code>user42</code>, the user is blocked forever.</li>
     <li><strong>Bonus:</strong> kill Redis and show fail-open vs fail-closed behaviour.</li>
   </ol>
 </section>
