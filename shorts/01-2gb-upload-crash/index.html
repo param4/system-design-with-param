@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2 GB Upload Crash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Dark-first study page; light theme via the toggle. Brand = navy + cyan + violet (same as 01-rate-limiter). */
+:root{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.14); --bad-soft:rgba(248,113,113,.12); --ok-soft:rgba(52,211,153,.12);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10); --bad-soft:rgba(220,38,38,.08); --ok-soft:rgba(21,128,61,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:1.7;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 16px 90px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2rem)}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--cyan)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0;padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px;padding-top:60px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.callout{border-left:3px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:0 10px 10px 0}
+.bad{color:var(--bad)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{font:500 .82rem var(--f-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--cyan);outline:none}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn[aria-pressed="true"]{background:var(--cyan-soft);border-color:var(--cyan);color:var(--cyan)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font:.78rem var(--f-mono);text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover{border-color:var(--cyan)}
+.hero{display:flex;flex-direction:column;gap:16px}
+.q{font-size:1.2rem;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px 18px}
+.q b{color:var(--bad)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);fill:var(--ink)}
+.diagram{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:12px}
+.cap{font-size:.86rem;color:var(--muted);margin-top:6px}
+/* sim panels */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px}
+.sim-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.ctl label{display:flex;justify-content:space-between;font:.78rem var(--f-mono);color:var(--muted)}
+.ctl label b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--cyan)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.meter{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px}
+.meter .k{font:.72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.meter .v{font:600 1.35rem var(--f-display);margin:2px 0 8px}
+.bar{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .35s,background .35s}
+.verdict{font:600 1rem var(--f-display);padding:12px 14px;border-radius:10px}
+.verdict.badv{background:var(--bad-soft);color:var(--bad)}
+.verdict.okv{background:var(--ok-soft);color:var(--ok)}
+.verdict.warnv{background:rgba(251,191,36,.12);color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:4px}
+.tile{height:26px;border-radius:4px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
+.tile i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.tile.done i{background:var(--ok);width:100%!important}
+.tile.fail{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.single{height:34px;border-radius:6px;background:var(--bg);border:1px solid var(--line);overflow:hidden;position:relative}
+.single i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.stats{display:flex;flex-wrap:wrap;gap:18px;font:.84rem var(--f-mono);color:var(--muted)}
+.stats b{color:var(--ink);font-weight:500}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:8px}
+.checks label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.checks input{margin-top:5px;accent-color:var(--cyan)}
+.flowdot{fill:var(--cyan)}
+@media (prefers-reduced-motion: reduce){ .anim{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <span class="eyebrow">System Design with Param · Shorts study notes · 01</span>
+  <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">☀︎ Light</button>
+</div>
+
+<header class="hero" style="margin-top:22px">
+  <h1>2 GB upload crashes the server</h1>
+  <p class="q">“A user uploads a <b>2 GB</b> file and your server <b>crashes within seconds</b>. How do you handle this in production?”</p>
+  <nav class="toc">
+    <a href="#why">1 · Why it dies</a><a href="#calc">Crash simulator</a><a href="#fixes">2 · Fixes</a><a href="#multi">Multipart simulator</a>
+    <a href="#traps">3 · Interview traps</a><a href="#prod">4 · Production depth</a><a href="#codeera">5 · Popular answer</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
+  </nav>
+</header>
+
+<!-- ============ 1. WHY ============ -->
+<section id="why">
+  <span class="eyebrow">1 · Must-know</span>
+  <h2>Why the server dies</h2>
+  <p>Three things run out, usually in this order:</p>
+  <div class="tbl"><table>
+    <tr><th>Resource</th><th>What happens</th><th>Numbers</th></tr>
+    <tr><td><strong>Memory</strong></td><td>Code reads the whole body into RAM: <code>file.getBytes()</code>, <code>readAllBytes()</code>, Express <code>multer.memoryStorage()</code>.</td><td>2 GB per upload. 10 users at once = <strong class="bad">20 GB</strong> → OutOfMemoryError.</td></tr>
+    <tr><td><strong>Threads</strong></td><td>The request keeps a worker thread busy for the whole transfer.</td><td>2 GB = 16,000 Mb. At 20 Mbps: <strong class="bad">800 s ≈ 13 min</strong> per upload.</td></tr>
+    <tr><td><strong>Disk / bandwidth</strong></td><td>Big bodies spool to <code>/tmp</code>; the proxy may buffer them too. Every byte crosses your network card twice.</td><td>In from the user, out to storage.</td></tr>
+  </table></div>
+  <p class="callout"><span class="imp">IMP</span><strong>It's not a storage problem, it's a “who carries the bytes” problem.</strong> While the 2 GB flows through your app server, a bigger machine only moves the limit.</p>
+</section>
+
+<!-- ============ CRASH SIM ============ -->
+<section id="calc">
+  <span class="eyebrow">Interactive</span>
+  <h2>Crash simulator</h2>
+  <p class="muted">Pick how the server handles the upload, then drag the sliders. Watch which resource breaks first.</p>
+  <div class="sim">
+    <div class="sim-h">
+      <div class="seg" role="group" aria-label="Upload approach">
+        <button class="btn" data-mode="ram" aria-pressed="true">❌ Load into RAM</button>
+        <button class="btn" data-mode="stream" aria-pressed="false">⚠️ Stream through server</button>
+        <button class="btn" data-mode="direct" aria-pressed="false">✅ Presigned, direct to S3</button>
+      </div>
+    </div>
+    <div class="diagram">
+      <svg viewBox="0 0 760 170" role="img" aria-label="Data path for the chosen approach">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+        <rect x="20" y="55" width="140" height="60" rx="10" fill="var(--surface)" stroke="var(--line)"/><text x="90" y="91" text-anchor="middle" font-size="15">📱 Browser</text>
+        <rect id="srvBox" x="310" y="55" width="140" height="60" rx="10" fill="var(--surface)" stroke="var(--line)"/><text x="380" y="91" text-anchor="middle" font-size="15">🖥 API server</text>
+        <rect x="600" y="55" width="140" height="60" rx="10" fill="var(--surface)" stroke="var(--line)"/><text x="670" y="91" text-anchor="middle" font-size="15">🪣 S3</text>
+        <g id="pathVia">
+          <path id="p1" d="M160,85 L310,85" stroke="var(--bad)" stroke-width="3" fill="none" marker-end="url(#ah)"/>
+          <path id="p2" d="M450,85 L600,85" stroke="var(--bad)" stroke-width="3" fill="none" marker-end="url(#ah)"/>
+          <text x="235" y="72" text-anchor="middle" font-size="12" fill="var(--bad)">2 GB</text>
+          <text x="525" y="72" text-anchor="middle" font-size="12" fill="var(--bad)">2 GB</text>
+          <circle class="flowdot anim" r="6"><animateMotion dur="1.6s" repeatCount="indefinite" path="M160,85 L310,85"/></circle>
+          <circle class="flowdot anim" r="6"><animateMotion dur="1.6s" begin=".8s" repeatCount="indefinite" path="M450,85 L600,85"/></circle>
+        </g>
+        <g id="pathDirect" style="display:none">
+          <path d="M160,72 C230,30 260,30 310,62" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" fill="none" marker-end="url(#ah)"/>
+          <text x="235" y="28" text-anchor="middle" font-size="12" fill="var(--muted)">① ask · ② get URL (KB)</text>
+          <path id="pd" d="M90,115 C200,170 560,170 660,118" stroke="var(--ok)" stroke-width="3" fill="none" marker-end="url(#ah)"/>
+          <text x="380" y="160" text-anchor="middle" font-size="12" fill="var(--ok)">③ 2 GB goes straight to S3</text>
+          <circle class="anim" r="6" fill="var(--ok)"><animateMotion dur="2s" repeatCount="indefinite" path="M90,115 C200,170 560,170 660,118"/></circle>
+        </g>
+      </svg>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label for="sz">File size <b id="szv"></b></label><input id="sz" type="range" min="0.1" max="10" step="0.1" value="2"></div>
+      <div class="ctl"><label for="us">Users uploading at once <b id="usv"></b></label><input id="us" type="range" min="1" max="500" step="1" value="10"></div>
+      <div class="ctl"><label for="bw">User's uplink <b id="bwv"></b></label><input id="bw" type="range" min="2" max="500" step="1" value="20"></div>
+      <div class="ctl"><label for="ram">Server RAM <b id="ramv"></b></label><input id="ram" type="range" min="2" max="128" step="2" value="8"></div>
+      <div class="ctl"><label for="th">Thread pool <b id="thv"></b></label><input id="th" type="range" min="10" max="1000" step="10" value="200"></div>
+    </div>
+    <div class="meters">
+      <div class="meter"><div class="k">Server RAM used</div><div class="v" id="mRam"></div><div class="bar"><i id="bRam"></i></div></div>
+      <div class="meter"><div class="k">Threads held</div><div class="v" id="mTh"></div><div class="bar"><i id="bTh"></i></div></div>
+      <div class="meter"><div class="k">Bytes through your server</div><div class="v" id="mNet"></div><div class="bar"><i id="bNet"></i></div></div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+</section>
+
+<!-- ============ 2. FIXES ============ -->
+<section id="fixes">
+  <span class="eyebrow">2 · Must-know</span>
+  <h2>The four fixes, in order of impact</h2>
+  <div class="stack">
+    <div class="card"><h3>① Streaming <span class="muted" style="font-size:.85rem">(if bytes must pass through you)</span></h3><p>Read the body as an <code>InputStream</code> and pipe it onward in small chunks. Memory = buffer size, not file size. <span class="warn">Fixes RAM only</span>: the 13-minute thread hold and double bandwidth stay.</p></div>
+    <div class="card"><h3><span class="imp">IMP</span>② Presigned URL: direct upload</h3><p>The server only checks “is this user allowed?” and signs a short-lived URL for <em>one exact object key</em>. The browser uploads straight to S3 (or GCS / Azure Blob). Your server handles two tiny JSON calls instead of 2 GB. <span class="ok">Fixes RAM, threads, bandwidth and cost together.</span></p></div>
+    <div class="card"><h3>③ Multipart upload</h3><p>Split into parts (e.g. 2 GB → 21 parts of 100 MB) and upload them in parallel. A network drop costs one part, not the whole file. Resume is possible. Try it in the simulator below.</p></div>
+    <div class="card"><h3>④ Async processing</h3><p>When the upload completes, S3 fires an event → queue → worker does virus scan, transcode, thumbnails. The user sees “Processing…” instead of a hanging request.</p></div>
+  </div>
+
+  <h3 style="margin-top:10px">The full flow: presigned multipart upload</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 760 470" role="img" aria-label="Sequence: client, API server, S3, queue and worker">
+      <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker>
+      <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ok)"/></marker></defs>
+      <g font-size="13">
+        <rect x="20" y="10" width="120" height="36" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="80" y="33" text-anchor="middle">📱 Client</text>
+        <rect x="230" y="10" width="120" height="36" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="290" y="33" text-anchor="middle">🖥 API</text>
+        <rect x="440" y="10" width="120" height="36" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="500" y="33" text-anchor="middle">🪣 S3</text>
+        <rect x="620" y="10" width="120" height="36" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="680" y="33" text-anchor="middle">📨 Queue+worker</text>
+      </g>
+      <g stroke="var(--line)" stroke-dasharray="4 4"><line x1="80" y1="46" x2="80" y2="460"/><line x1="290" y1="46" x2="290" y2="460"/><line x1="500" y1="46" x2="500" y2="460"/><line x1="680" y1="46" x2="680" y2="460"/></g>
+      <g font-size="12" stroke-width="1.6">
+        <line x1="80" y1="80" x2="288" y2="80" stroke="var(--ink)" marker-end="url(#a2)"/><text x="185" y="72" text-anchor="middle">1 · POST /uploads {name, size, type}</text>
+        <line x1="290" y1="115" x2="498" y2="115" stroke="var(--ink)" marker-end="url(#a2)"/><text x="395" y="107" text-anchor="middle">2 · CreateMultipartUpload</text>
+        <line x1="500" y1="140" x2="292" y2="140" stroke="var(--muted)" marker-end="url(#a2)"/><text x="395" y="156" text-anchor="middle" fill="var(--muted)">uploadId</text>
+        <line x1="290" y1="185" x2="82" y2="185" stroke="var(--ink)" marker-end="url(#a2)"/><text x="185" y="177" text-anchor="middle">3 · N presigned part URLs (KB)</text>
+        <line x1="80" y1="225" x2="498" y2="225" stroke="var(--ok)" stroke-width="4" marker-end="url(#a3)"/><line x1="80" y1="240" x2="498" y2="240" stroke="var(--ok)" stroke-width="4" marker-end="url(#a3)"/><line x1="80" y1="255" x2="498" y2="255" stroke="var(--ok)" stroke-width="4" marker-end="url(#a3)"/>
+        <text x="290" y="208" text-anchor="middle" fill="var(--ok)">4 · PUT part 1..N in parallel (the 2 GB), keep each ETag</text>
+        <line x1="80" y1="300" x2="288" y2="300" stroke="var(--ink)" marker-end="url(#a2)"/><text x="185" y="292" text-anchor="middle">5 · POST /complete {parts+ETags}</text>
+        <line x1="290" y1="330" x2="498" y2="330" stroke="var(--ink)" marker-end="url(#a2)"/><text x="395" y="322" text-anchor="middle">6 · CompleteMultipartUpload</text>
+        <line x1="290" y1="365" x2="498" y2="365" stroke="var(--ink)" marker-end="url(#a2)"/><text x="395" y="357" text-anchor="middle">7 · HeadObject: verify size, checksum</text>
+        <line x1="500" y1="405" x2="678" y2="405" stroke="var(--violet)" marker-end="url(#a2)"/><text x="590" y="397" text-anchor="middle" fill="var(--violet)">8 · ObjectCreated event</text>
+        <text x="680" y="440" text-anchor="middle" fill="var(--violet)">scan → process → serve</text>
+      </g>
+      <rect x="236" y="70" width="0" height="0"/>
+    </svg>
+  </div>
+  <p class="cap">Only the green arrows carry the file, and none of them touch your API server. The object key is chosen by the server: <code>uploads/{userId}/{uuid}</code>.</p>
+
+  <h3 style="margin-top:10px"><span class="imp">IMP</span>S3 numbers to remember</h3>
+  <div class="tbl"><table>
+    <tr><th>Fact</th><th>Value</th></tr>
+    <tr><td>Max single PUT</td><td><strong>5 GB</strong> (AWS suggests multipart from ~100 MB)</td></tr>
+    <tr><td>Part size</td><td><strong>5 MiB – 5 GiB</strong> (last part can be smaller)</td></tr>
+    <tr><td>Max parts per upload</td><td><strong>10,000</strong></td></tr>
+    <tr><td>Max object size</td><td><strong>48.8 TiB</strong></td></tr>
+    <tr><td>Presigned URL max life</td><td><strong>7 days</strong> (SigV4, IAM user). Role/STS creds: dies when the creds expire (EC2 role ~6 h, AssumeRole default 1 h)</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ MULTIPART SIM ============ -->
+<section id="multi">
+  <span class="eyebrow">Interactive</span>
+  <h2>Multipart simulator</h2>
+  <p class="muted">Start the upload, then hit <strong>Drop network</strong> halfway. Compare how much has to be sent again.</p>
+  <div class="sim">
+    <div class="sim-h">
+      <div class="seg" role="group" aria-label="Upload type">
+        <button class="btn" data-up="single" aria-pressed="false">Single PUT</button>
+        <button class="btn" data-up="multi" aria-pressed="true">Multipart</button>
+      </div>
+      <div class="seg">
+        <button class="btn primary" id="go">▶ Start</button>
+        <button class="btn danger" id="drop">⚡ Drop network</button>
+        <button class="btn" id="reset">↺ Reset</button>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label for="mf">File size <b id="mfv"></b></label><input id="mf" type="range" min="0.5" max="10" step="0.5" value="2"></div>
+      <div class="ctl"><label for="mp">Part size <b id="mpv"></b></label><input id="mp" type="range" min="5" max="500" step="5" value="100"></div>
+      <div class="ctl"><label for="mk">Parallel parts <b id="mkv"></b></label><input id="mk" type="range" min="1" max="10" step="1" value="4"></div>
+    </div>
+    <div id="viz"></div>
+    <div class="stats">
+      <span>Parts: <b id="sParts"></b></span>
+      <span>Uploaded: <b id="sUp">0%</b></span>
+      <span>Drops: <b id="sDrops">0</b></span>
+      <span>Re-sent because of drops: <b id="sWaste" class="bad">0 MB</b></span>
+    </div>
+    <div class="verdict" id="mv" style="display:none"></div>
+  </div>
+</section>
+
+<!-- ============ 3. TRAPS ============ -->
+<section id="traps">
+  <span class="eyebrow">3 · Interview traps</span>
+  <h2>Answers that sound right but aren't</h2>
+  <div class="stack">
+    <div class="card"><h3 class="bad">“Just increase max-file-size to 2 GB.”</h3><p>That removes a guard. Spring Boot's defaults are <code>max-file-size=1MB</code>, <code>max-request-size=10MB</code> on purpose. Raising them without streaming invites the crash.</p></div>
+    <div class="card"><h3 class="bad">“Use S3.”</h3><p>If the bytes go browser → your server → S3, S3 changed nothing about RAM, threads or bandwidth. Say <strong>direct</strong> upload.</p></div>
+    <div class="card"><h3 class="bad">“Presigned URLs are secure.”</h3><p>A presigned URL is a <strong>bearer token</strong>: anyone holding it can use it, many times, until it expires. Keep expiry short (5–15 min), scope it to one server-chosen key, never let the client pick the path. S3 silently replaces an existing object with the same key.</p></div>
+    <div class="card"><h3 class="bad">“The UI blocks files over 2 GB.”</h3><p>A presigned <strong>PUT</strong> doesn't cap size by itself. Use a presigned <strong>POST</strong> with <code>["content-length-range", min, max]</code>, or presign each part (part count × part size caps the total). Always verify with <code>HeadObject</code> after upload.</p></div>
+    <div class="card"><h3 class="bad">“Client said upload done, so it's done.”</h3><p>Never trust it. Check the object exists, the size matches what you approved, and the checksum matches (SigV4 supports CRC32, CRC32C, SHA-256 and more).</p></div>
+    <div class="card"><h3 class="bad">“Streaming solves it.”</h3><p>Memory only. The thread is still held for ~13 minutes and every byte still crosses your network card twice. Try “Stream through server” in the crash simulator with 500 users.</p></div>
+    <div class="card"><h3 class="warn">“URL expires mid-upload → upload breaks?”</h3><p>No. S3 checks expiry when the request <strong>starts</strong>. A part that started before expiry finishes. A retry after expiry fails, so the client asks for a fresh URL.</p></div>
+  </div>
+</section>
+
+<!-- ============ 4. PROD ============ -->
+<section id="prod">
+  <span class="eyebrow">4 · Production depth</span>
+  <h2>Limits you hit before your code even runs</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 760 150" role="img" aria-label="Upload passes through layers, each with its own size limit">
+      <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+      <g font-size="12">
+        <rect x="10" y="40" width="110" height="56" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="65" y="73" text-anchor="middle">📱 2 GB</text>
+        <rect x="160" y="40" width="130" height="56" rx="8" fill="var(--surface)" stroke="var(--bad)"/><text x="225" y="64" text-anchor="middle">Cloudflare</text><text x="225" y="84" text-anchor="middle" fill="var(--bad)">100 MB</text>
+        <rect x="330" y="40" width="130" height="56" rx="8" fill="var(--surface)" stroke="var(--bad)"/><text x="395" y="64" text-anchor="middle">nginx</text><text x="395" y="84" text-anchor="middle" fill="var(--bad)">1 MB → 413</text>
+        <rect x="500" y="40" width="110" height="56" rx="8" fill="var(--surface)" stroke="var(--bad)"/><text x="555" y="64" text-anchor="middle">API Gateway</text><text x="555" y="84" text-anchor="middle" fill="var(--bad)">10 MB</text>
+        <rect x="650" y="40" width="100" height="56" rx="8" fill="var(--surface)" stroke="var(--bad)"/><text x="700" y="64" text-anchor="middle">Lambda</text><text x="700" y="84" text-anchor="middle" fill="var(--bad)">6 MB</text>
+        <line x1="120" y1="68" x2="158" y2="68" stroke="var(--muted)" marker-end="url(#a4)"/><line x1="290" y1="68" x2="328" y2="68" stroke="var(--muted)" marker-end="url(#a4)"/><line x1="460" y1="68" x2="498" y2="68" stroke="var(--muted)" marker-end="url(#a4)"/><line x1="610" y1="68" x2="648" y2="68" stroke="var(--muted)" marker-end="url(#a4)"/>
+        <text x="380" y="130" text-anchor="middle" fill="var(--muted)">Each hop has its own default cap. The 2 GB never reaches your code.</text>
+      </g>
+    </svg>
+  </div>
+  <div class="tbl"><table>
+    <tr><th>Layer</th><th>Limit</th></tr>
+    <tr><td>nginx</td><td><code>client_max_body_size</code> default <strong>1m</strong> → 413. <code>proxy_request_buffering on</code> (default) reads the <strong>whole body</strong> before passing it on; set <code>off</code> on streaming upload routes.</td></tr>
+    <tr><td>AWS API Gateway</td><td>Max payload <strong>10 MB</strong></td></tr>
+    <tr><td>AWS Lambda</td><td>Sync request payload <strong>6 MB</strong></td></tr>
+    <tr><td>Cloudflare</td><td>Request body cap <strong>100 MB</strong> on Free/Pro plans</td></tr>
+    <tr><td>Java</td><td>A <code>byte[]</code> holds at most ~2<sup>31</sup> bytes (~2 GiB), so <code>getBytes()</code> on a 2+ GiB file fails even with free heap</td></tr>
+  </table></div>
+  <p class="callout"><span class="imp">IMP</span>These limits are why serverless and CDN-fronted apps <strong>must</strong> upload directly to storage. There is no “just make it bigger” option.</p>
+
+  <h3>Abandoned uploads cost money</h3>
+  <p>Parts of a multipart upload that never completes stay in the bucket and are billed. Add a lifecycle rule <code>AbortIncompleteMultipartUpload</code> (e.g. <code>DaysAfterInitiation: 1</code>).</p>
+
+  <h3>Resume after the user closes the laptop</h3>
+  <ul>
+    <li><strong>S3:</strong> store the <code>uploadId</code>; <code>ListParts</code> returns which parts already landed; upload only the rest.</li>
+    <li><strong>tus protocol</strong> (open standard): <code>HEAD</code> returns <code>Upload-Offset</code> (bytes the server has); the client <code>PATCH</code>es the rest from that offset. Used by Vimeo, Cloudflare Stream, Supabase.</li>
+  </ul>
+
+  <h3>Choosing part size</h3>
+  <ul>
+    <li>More parts = finer retries, more requests. Fewer parts = bigger retries.</li>
+    <li>2 GB: 64–100 MB parts. Minimum 5 MiB, max 10,000 parts, so a 1 TB file needs parts of at least ~100 MB.</li>
+    <li>3–6 parallel parts per client is usually enough; more just shares the same uplink.</li>
+  </ul>
+
+  <h3>Security pipeline</h3>
+  <div class="diagram">
+    <svg viewBox="0 0 760 120" role="img" aria-label="quarantine, scan, clean, serve">
+      <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+      <g font-size="12">
+        <rect x="10" y="30" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--warn)"/><text x="85" y="54" text-anchor="middle">quarantine/</text><text x="85" y="74" text-anchor="middle" fill="var(--muted)">upload lands</text>
+        <rect x="205" y="30" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="280" y="54" text-anchor="middle">event → queue</text><text x="280" y="74" text-anchor="middle" fill="var(--muted)">S3 / SQS / Kafka</text>
+        <rect x="400" y="30" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--line)"/><text x="475" y="54" text-anchor="middle">worker</text><text x="475" y="74" text-anchor="middle" fill="var(--muted)">scan · type check</text>
+        <rect x="595" y="30" width="150" height="56" rx="8" fill="var(--surface)" stroke="var(--ok)"/><text x="670" y="54" text-anchor="middle">clean/</text><text x="670" y="74" text-anchor="middle" fill="var(--muted)">now servable</text>
+        <line x1="160" y1="58" x2="203" y2="58" stroke="var(--muted)" marker-end="url(#a5)"/><line x1="355" y1="58" x2="398" y2="58" stroke="var(--muted)" marker-end="url(#a5)"/><line x1="550" y1="58" x2="593" y2="58" stroke="var(--muted)" marker-end="url(#a5)"/>
+      </g>
+    </svg>
+  </div>
+  <ul>
+    <li>Check the real type from the file's bytes (magic number), not the extension or client <code>Content-Type</code>.</li>
+    <li>Unzip/process inside size and time limits (zip bomb: 1 KB archive → GBs).</li>
+    <li>Rate-limit the “create upload” endpoint per user so nobody farms URLs to fill your bucket.</li>
+    <li>Downloads mirror the problem: serve with a presigned <strong>GET</strong> or a CDN, never through the app.</li>
+  </ul>
+
+  <h3>Other stacks, same trap</h3>
+  <ul>
+    <li><strong>Node/Express:</strong> <code>multer.memoryStorage()</code> = whole file in RAM; use disk storage or stream with busboy. <code>express.json()</code> default limit is 100 kb.</li>
+    <li><strong>Python:</strong> Django keeps uploads under 2.5 MB in memory, bigger ones go to a temp file; FastAPI <code>UploadFile</code> spools to disk past ~1 MB. Fine for medium files, still wrong for 2 GB through the app.</li>
+  </ul>
+</section>
+
+<!-- ============ 5. CODEERA ============ -->
+<section id="codeera">
+  <span class="eyebrow">5 · The popular answer</span>
+  <h2>Where codeera's answer falls short</h2>
+  <p class="muted">Source: <a href="https://www.instagram.com/reel/DWlj0GsgPAJ/">codeera.tech reel</a> (57K views), related <a href="https://www.instagram.com/reel/DV7gXzFDKCb/">reel</a> (49K).</p>
+  <div class="tbl"><table>
+    <tr><th>His point</th><th>Verdict</th></tr>
+    <tr><td>Don't load the whole file into memory</td><td class="ok">✅ Correct</td></tr>
+    <tr><td>Stream in chunks</td><td><span class="ok">✅ Correct</span>, but memory is the only thing it fixes. The thread hold and double bandwidth stay</td></tr>
+    <tr><td>Set <code>max-file-size=2GB</code></td><td><span class="warn">⚠️ Misleading</span>: that <em>raises</em> Spring's 1 MB default. It's a guard, not a fix; the real cap belongs in the signed policy</td></tr>
+    <tr><td>Presigned URLs “remove bottlenecks completely”</td><td><span class="warn">⚠️ Right idea</span>; missing the bearer-token risk, short expiry, server-chosen key, size cap, verify after upload</td></tr>
+    <tr><td>Multipart, parallel + resume</td><td><span class="ok">✅ Correct</span>; missing the numbers (5 MiB, 10,000 parts) and the bill for abandoned parts</td></tr>
+    <tr><td>Async processing</td><td><span class="ok">✅ Correct</span>; missing quarantine + scan before serving</td></tr>
+    <tr><td><em>Not mentioned</em></td><td>Proxy/gateway limits, why it crashes (concurrency × size), checksum verification, tus</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 6. QUIZ ============ -->
+<section id="quiz">
+  <span class="eyebrow">6 · Self-quiz</span>
+  <h2>Check yourself (tap to reveal)</h2>
+  <div class="stack">
+    <details><summary>1. Streaming is in place and memory is flat, but the server stops accepting requests during big uploads. Why?</summary><p>Each upload still holds a worker thread for the whole transfer (~13 min for 2 GB at 20 Mbps). A few concurrent uploads exhaust the pool.</p></details>
+    <details><summary>2. You hand out a presigned PUT URL valid for 1 hour. What two things can go wrong?</summary><p>Anyone with the URL can upload, repeatedly, until expiry (bearer token). And a plain PUT doesn't cap size. Fix: short expiry, server-chosen key, POST policy with content-length-range or per-part presigning, verify with HeadObject.</p></details>
+    <details><summary>3. A 2 GB upload in 20 parts fails at part 14 because the network dropped. What does the client re-upload?</summary><p>Only part 14 (plus any parts in flight), using the same uploadId. ListParts tells it which parts S3 already has.</p></details>
+    <details><summary>4. Your S3 bill keeps growing but the object count doesn't. Likely cause?</summary><p>Incomplete multipart uploads: their parts are stored and billed but never become objects. Add an AbortIncompleteMultipartUpload lifecycle rule.</p></details>
+    <details><summary>5. Your app runs on Lambda behind API Gateway. Can you accept a 2 GB upload with streaming?</summary><p>No. API Gateway caps payloads at 10 MB and Lambda's sync payload at 6 MB. Direct-to-S3 with presigned URLs is the only option.</p></details>
+  </div>
+</section>
+
+<!-- ============ 7. PICK ============ -->
+<section id="pick">
+  <span class="eyebrow">7 · For the short</span>
+  <h2>Pick the points to keep</h2>
+  <p class="muted">Ticks are saved in this browser. Hit “Copy my picks” and paste them to me.</p>
+  <div class="stack checks" id="checks"></div>
+  <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
+</section>
+
+<section id="sources">
+  <span class="eyebrow">Sources</span>
+  <ul class="muted">
+    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html">S3 multipart upload limits</a> · <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html">Multipart overview</a></li>
+    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">S3 presigned URLs: expiry, bearer-token note</a></li>
+    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html">S3 POST policy (content-length-range)</a></li>
+    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpu-abort-incomplete-mpu-lifecycle-config.html">Abort incomplete multipart uploads</a></li>
+    <li><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_request_buffering">nginx proxy_request_buffering</a> · <a href="https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size">client_max_body_size</a></li>
+    <li><a href="https://docs.spring.io/spring-boot/appendix/application-properties/index.html">Spring Boot multipart properties</a></li>
+    <li><a href="https://docs.aws.amazon.com/apigateway/latest/developerguide/limits.html">API Gateway quotas</a> · <a href="https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html">Lambda quotas</a></li>
+    <li><a href="https://tus.io/protocols/resumable-upload">tus resumable upload protocol</a></li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+// ---------- theme ----------
+(function(){
+  const root=document.documentElement, b=document.getElementById('theme');
+  let t='dark'; try{ t=localStorage.getItem('sdwp-theme')||'dark'; }catch(e){}
+  const apply=()=>{ root.dataset.theme=t; b.textContent = t==='dark' ? '☀︎ Light' : '☾ Dark'; };
+  apply();
+  b.onclick=()=>{ t = t==='dark'?'light':'dark'; apply(); try{ localStorage.setItem('sdwp-theme',t); }catch(e){} };
+})();
+
+const $=id=>document.getElementById(id);
+const fmtGB=g=> g>=1 ? g.toFixed(g<10?1:0)+' GB' : Math.round(g*1024)+' MB';
+const fmtT=s=> s<60 ? Math.round(s)+' s' : s<3600 ? (s/60).toFixed(1)+' min' : (s/3600).toFixed(1)+' h';
+
+// ---------- crash simulator ----------
+(function(){
+  let mode='ram';
+  document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{
+    mode=b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed', x===b));
+    calc();
+  });
+  ['sz','us','bw','ram','th'].forEach(id=>$(id).oninput=calc);
+  function setBar(el,frac,color){ el.style.width=Math.min(100,frac*100)+'%'; el.style.background=color; }
+  function calc(){
+    const S=+$('sz').value, U=+$('us').value, B=+$('bw').value, R=+$('ram').value, T=+$('th').value;
+    $('szv').textContent=fmtGB(S); $('usv').textContent=U; $('bwv').textContent=B+' Mbps'; $('ramv').textContent=R+' GB'; $('thv').textContent=T;
+    const secs=S*8000/B;
+    let ram, threads, hold, net;
+    if(mode==='ram'){ ram=S*U; threads=U; hold=secs; net=2*S*U; }
+    else if(mode==='stream'){ ram=U*8/1024+0.2; threads=U; hold=secs; net=2*S*U; }
+    else { ram=0.2; threads=Math.max(1,Math.round(U*0.05/ Math.max(secs,1))); hold=0.05; net=U*4/1024/1024; }
+    $('mRam').textContent=fmtGB(ram)+' / '+R+' GB';
+    setBar($('bRam'),ram/R, ram>R?'var(--bad)':ram>0.75*R?'var(--warn)':'var(--ok)');
+    $('mTh').textContent= Math.min(threads,T)+' / '+T+(mode==='direct'?' · ~50 ms each':' · '+fmtT(hold)+' each');
+    setBar($('bTh'),threads/T, threads>=T?'var(--bad)':threads>0.75*T?'var(--warn)':'var(--ok)');
+    $('mNet').textContent= mode==='direct' ? '≈ '+Math.max(1,Math.round(U*4))+' KB' : fmtGB(net);
+    setBar($('bNet'), mode==='direct'?0.01:Math.min(1,net/50), mode==='direct'?'var(--ok)':'var(--bad)');
+    const v=$('verdict');
+    const javaArr = mode==='ram' && S>2.147;
+    if(mode==='ram' && (ram>R || javaArr)){ v.className='verdict badv'; v.textContent = javaArr && ram<=R ? '💥 Crash: a Java byte[] can\'t even hold more than ~2 GiB, free RAM or not.' : '💥 OutOfMemoryError: '+U+' × '+fmtGB(S)+' needs '+fmtGB(ram)+', you have '+R+' GB.'; }
+    else if(mode!=='direct' && threads>=T){ v.className='verdict badv'; v.textContent='🧵 Thread pool exhausted: all '+T+' threads stuck in uploads for '+fmtT(hold)+'. Login, search, everything else waits.'; }
+    else if(mode!=='direct'){ v.className='verdict warnv'; v.textContent='⚠️ Survives for now, but '+threads+' threads are tied up for '+fmtT(hold)+' and '+fmtGB(net)+' crosses your network card. Push the users slider.'; }
+    else { v.className='verdict okv'; v.textContent='✅ Server barely notices: two tiny JSON calls per upload. S3 takes the '+fmtGB(S*U)+'.'; }
+    $('pathVia').style.display = mode==='direct'?'none':'';
+    $('pathDirect').style.display = mode==='direct'?'':'none';
+    $('srvBox').setAttribute('stroke', mode==='direct'?'var(--line)': (v.className.includes('badv')?'var(--bad)':'var(--warn)'));
+  }
+  calc();
+})();
+
+// ---------- multipart simulator ----------
+(function(){
+  let up='multi', parts=[], single=null, running=false, raf=0, last=0, drops=0, waste=0, totalMB=0, partMB=0;
+  const REAL_SECONDS=10; // whole file takes ~10 s of animation at full bandwidth
+  document.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{
+    up=b.dataset.up; document.querySelectorAll('[data-up]').forEach(x=>x.setAttribute('aria-pressed',x===b)); reset();
+  });
+  ['mf','mp','mk'].forEach(id=>$(id).oninput=reset);
+  $('go').onclick=()=>{ if(!running){ running=true; last=performance.now(); raf=setInterval(()=>tick(performance.now()),33); $('go').textContent='⏸ Pause'; } else { running=false; clearInterval(raf); $('go').textContent='▶ Start'; } };
+  $('reset').onclick=reset;
+  $('drop').onclick=()=>{
+    drops++;
+    if(up==='single'){ if(single && single.p<1){ waste+=single.p*totalMB; single.p=0; flash($('viz').firstChild); } }
+    else parts.forEach(p=>{ if(p.active && p.p<1){ waste+=p.p*partMB; p.p=0; p.fail=true; setTimeout(()=>p.fail=false,600); } });
+    render();
+  };
+  function flash(el){ if(!el) return; el.style.outline='2px solid var(--bad)'; setTimeout(()=>el.style.outline='',600); }
+  function reset(){
+    running=false; clearInterval(raf); $('go').textContent='▶ Start'; drops=0; waste=0;
+    const F=+$('mf').value, P=+$('mp').value, K=+$('mk').value;
+    $('mfv').textContent=F+' GB'; $('mpv').textContent=P+' MB'; $('mkv').textContent=K;
+    totalMB=F*1024; partMB=P;
+    $('mp').disabled = $('mk').disabled = up==='single';
+    const viz=$('viz'); viz.innerHTML='';
+    const mv=$('mv'); mv.style.display='none';
+    if(up==='single'){
+      single={p:0};
+      viz.innerHTML='<div class="single"><i></i></div>';
+      $('sParts').textContent='1 (one '+F+' GB request)';
+      if(F>5){ mv.style.display=''; mv.className='verdict badv'; mv.textContent='❌ S3 rejects a single PUT over 5 GB. Switch to multipart.'; }
+    } else {
+      const n=Math.ceil(totalMB/P);
+      parts=Array.from({length:n},(_,i)=>({p:0,active:false,fail:false,size: i===n-1 ? totalMB-P*(n-1) : P}));
+      const shown=Math.min(n,400);
+      viz.innerHTML='<div class="tiles">'+'<div class="tile"><i></i></div>'.repeat(shown)+'</div>'+(n>400?'<p class="cap">Showing first 400 of '+n+' parts.</p>':'');
+      $('sParts').textContent=n+' × '+P+' MB';
+      if(n>10000){ mv.style.display=''; mv.className='verdict badv'; mv.textContent='❌ '+n+' parts: S3 allows max 10,000. Use bigger parts.'; }
+    }
+    render();
+  }
+  function tick(now){
+    const dt=Math.min(0.1,(now-last)/1000); last=now;
+    const bw=totalMB/REAL_SECONDS; // MB per animation-second, shared by active parts
+    if(up==='single'){ if(single.p<1) single.p=Math.min(1,single.p+bw*dt/totalMB); }
+    else {
+      const K=+$('mk').value;
+      let act=parts.filter(p=>p.active&&p.p<1);
+      for(const p of parts){ if(act.length>=K) break; if(!p.active&&p.p<1){ p.active=true; act.push(p);} }
+      act.forEach(p=>{ p.p=Math.min(1,p.p+(bw/act.length)*dt/p.size); if(p.p>=1) p.active=false; });
+    }
+    render();
+    const done = up==='single' ? single.p>=1 : parts.every(p=>p.p>=1);
+    if(done){ running=false; clearInterval(raf); $('go').textContent='▶ Start'; finish(); }
+  }
+  function finish(){
+    const mv=$('mv'); mv.style.display='';
+    if(!drops){ mv.className='verdict okv'; mv.textContent='✅ Done. Now reset and try again with ⚡ Drop network in the middle.'; return; }
+    mv.className = up==='single' ? 'verdict badv' : 'verdict okv';
+    mv.textContent = up==='single'
+      ? '😩 '+drops+' drop(s) cost you '+fmtGB(waste/1024)+' of re-upload. One drop near the end = start the whole file again.'
+      : '✅ '+drops+' drop(s) cost only '+fmtGB(waste/1024)+' of re-upload: just the parts that were in flight.';
+  }
+  function render(){
+    let up_=0;
+    if(up==='single'){ const i=$('viz').querySelector('.single i'); if(i) i.style.width=(single.p*100)+'%'; up_=single.p; }
+    else {
+      const tiles=$('viz').querySelectorAll('.tile');
+      tiles.forEach((t,i)=>{ const p=parts[i]; t.classList.toggle('done',p.p>=1); t.classList.toggle('fail',p.fail); t.firstChild.style.width=(p.p*100)+'%'; });
+      up_=parts.reduce((a,p)=>a+p.p*p.size,0)/totalMB;
+    }
+    $('sUp').textContent=Math.round(up_*100)+'%'; $('sDrops').textContent=drops; $('sWaste').textContent=fmtGB(waste/1024);
+  }
+  reset();
+})();
+
+// ---------- picks ----------
+(function(){
+  const pts=['The crash in numbers: 2 GB × 10 users = 20 GB RAM','The hidden cost: 13 min thread hold per upload','Streaming fixes memory only','Presigned URL: server gives permission, doesn\'t carry bytes','Presigned URL is a bearer token (expiry, key, size cap)','Multipart: retry one part, not 2 GB','Proxy/gateway limits (nginx 1 MB, API Gateway 10 MB, Lambda 6 MB)','Abandoned parts cost money','Async: S3 event → queue → scan → serve','codeera\'s max-file-size=2GB trap'];
+  let saved=[]; try{ saved=JSON.parse(localStorage.getItem('sdwp-s01-picks')||'[]'); }catch(e){}
+  $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+p+'</span></label>').join('');
+  const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);
+  $('checks').onchange=()=>{ try{ localStorage.setItem('sdwp-s01-picks',JSON.stringify(get())); }catch(e){} };
+  $('copy').onclick=async()=>{
+    const txt='Short 01 picks:\n'+get().map(i=>'- '+pts[i]).join('\n');
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='Copied ✓'; }catch(e){ $('copied').textContent=txt; }
+  };
+})();
+</script>
+</body>
+</html>

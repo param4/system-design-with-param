@@ -1,6 +1,8 @@
 # 2 GB upload crashes the server
 
 > **Interview question:** A user uploads a 2 GB file and your server crashes within seconds. How do you handle this in production?
+> **Interactive version (dark mode, diagrams, simulators):** https://param4.github.io/system-design-with-param/shorts/01-2gb-upload-crash/
+
 
 **Layers:** Must-know · Interview traps · Production depth · Where the popular answer falls short · Self-quiz
 
@@ -32,7 +34,7 @@ Three resources run out, usually in this order:
 
 1. **Streaming** (if the bytes must pass through you): read the body as an `InputStream` and pipe it onward in small chunks (KB–MB). Memory = buffer size, not file size. Fixes RAM; does **not** fix the 13-minute thread hold.
 2. **Presigned URL / direct upload** `IMP`: the server only checks "is this user allowed?" and signs a short-lived URL for one exact object key. The browser uploads straight to S3 (or GCS/Azure Blob). The app server handles two tiny JSON calls instead of 2 GB. Fixes RAM, threads, bandwidth and cost together.
-3. **Multipart upload**: split the file into parts (e.g. 100 MB × 20) and upload them in parallel. A network drop costs one part, not the whole file. Resume is possible.
+3. **Multipart upload**: split the file into parts (e.g. 2 GB → 21 parts of 100 MB) and upload them in parallel. A network drop costs one part, not the whole file. Resume is possible.
 4. **Async processing**: when the upload completes, S3 fires an event → queue (SQS/Kafka) → worker does virus scan, transcode, thumbnails. The user sees "Processing…" instead of a request that hangs.
 
 ### The S3 numbers to remember `IMP`
