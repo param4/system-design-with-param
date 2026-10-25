@@ -116,7 +116,7 @@ details[open] summary{margin-bottom:8px}
   <p class="muted">A common backend interview question. This page explains why the crash happens, the four standard fixes, the traps interviewers set, and what changes in real production systems. No prior AWS knowledge needed: every term is explained the first time it appears.</p>
   <nav class="toc">
     <a href="#terms">0 · Terms</a><a href="#why">1 · Why it dies</a><a href="#calc">Crash simulator</a><a href="#fixes">2 · Fixes</a><a href="#flow">Full flow</a><a href="#multi">Multipart simulator</a>
-    <a href="#traps">3 · Interview traps</a><a href="#prod">4 · Production depth</a><a href="#codeera">5 · Popular answer</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
+    <a href="#traps">3 · Interview traps</a><a href="#prod">4 · Production depth</a><a href="#quiz">5 · Self-quiz</a><a href="#pick">6 · Pick points</a>
   </nav>
 </header>
 
@@ -447,26 +447,9 @@ details[open] summary{margin-bottom:8px}
   </ul>
 </section>
 
-<!-- ============ 5. CODEERA ============ -->
-<section id="codeera">
-  <span class="eyebrow">5 · The popular answer</span>
-  <h2>What codeera's answer gets right and misses</h2>
-  <p class="muted">Source: <a href="https://www.instagram.com/reel/DWlj0GsgPAJ/">codeera.tech reel</a> (57K views), related <a href="https://www.instagram.com/reel/DV7gXzFDKCb/">reel</a> (49K). His six points, checked:</p>
-  <div class="tbl"><table>
-    <tr><th>His point</th><th>Verdict</th></tr>
-    <tr><td>Don't load the whole file into memory</td><td class="ok">✅ Correct.</td></tr>
-    <tr><td>Stream in chunks</td><td><span class="ok">✅ Correct</span>, but it only fixes memory. The 13-minute thread hold and double bandwidth remain.</td></tr>
-    <tr><td>Set <code>max-file-size=2GB</code></td><td><span class="warn">⚠️ Misleading.</span> That <em>raises</em> Spring's 1 MB safety limit. It lets the big file in rather than protecting you. The real size limit belongs in the signed upload URL.</td></tr>
-    <tr><td>Presigned URLs “remove bottlenecks completely”</td><td><span class="warn">⚠️ Right idea, missing the risks:</span> the URL works for anyone who has it, needs a short expiry, a server-chosen path, a size limit, and a check after upload.</td></tr>
-    <tr><td>Multipart: parallel + resume</td><td><span class="ok">✅ Correct.</span> Missing the numbers (5 MiB minimum part, 10,000 parts max) and the bill for abandoned uploads.</td></tr>
-    <tr><td>Async processing</td><td><span class="ok">✅ Correct.</span> Missing quarantine and virus scan before the file is served.</td></tr>
-    <tr><td><em>Not mentioned at all</em></td><td>Why it crashes (users × file size), proxy/gateway limits (nginx 1 MB, API Gateway 10 MB, Lambda 6 MB), checksum verification, resumable protocols (tus).</td></tr>
-  </table></div>
-</section>
-
 <!-- ============ 6. QUIZ ============ -->
 <section id="quiz">
-  <span class="eyebrow">6 · Self-quiz</span>
+  <span class="eyebrow">5 · Self-quiz</span>
   <h2>Check yourself (tap to reveal)</h2>
   <div class="stack">
     <details><summary>1. You added streaming and memory is now flat, but during big uploads the server stops answering other requests. Why?</summary><p>Each upload still occupies one thread for the whole transfer, about 13 minutes for 2 GB at 20 Mbps. When enough uploads run at once, all threads in the pool are busy and every other request (login, search) has to wait.</p></details>
@@ -479,7 +462,7 @@ details[open] summary{margin-bottom:8px}
 
 <!-- ============ 7. PICK ============ -->
 <section id="pick">
-  <span class="eyebrow">7 · For the short</span>
+  <span class="eyebrow">6 · For the short</span>
   <h2>Pick the points to keep</h2>
   <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
   <div class="stack checks" id="checks"></div>
@@ -630,7 +613,7 @@ const fmtT=s=> s<60 ? Math.round(s)+' s' : s<3600 ? (s/60).toFixed(1)+' min' : (
 
 // ---------- picks ----------
 (function(){
-  const pts=['The crash in numbers: 2 GB × 10 users = 20 GB RAM','The hidden cost: 13 min thread hold per upload','Streaming fixes memory only','Presigned URL: server gives permission, doesn\'t carry bytes','Presigned URL is a bearer token (expiry, key, size cap)','Multipart: retry one part, not 2 GB','Proxy/gateway limits (nginx 1 MB, API Gateway 10 MB, Lambda 6 MB)','Abandoned parts cost money','Async: S3 event → queue → scan → serve','codeera\'s max-file-size=2GB trap'];
+  const pts=['The crash in numbers: 2 GB × 10 users = 20 GB RAM','The hidden cost: 13 min thread hold per upload','Streaming fixes memory only','Presigned URL: server gives permission, doesn\'t carry bytes','Presigned URL is a bearer token (expiry, key, size cap)','Multipart: retry one part, not 2 GB','Proxy/gateway limits (nginx 1 MB, API Gateway 10 MB, Lambda 6 MB)','Abandoned parts cost money','Async: S3 event → queue → scan → serve','The max-file-size=2GB trap'];
   let saved=[]; try{ saved=JSON.parse(localStorage.getItem('sdwp-s01-picks')||'[]'); }catch(e){}
   $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+p+'</span></label>').join('');
   const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);

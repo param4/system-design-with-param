@@ -10,6 +10,5 @@ What it covers:
 - The four fixes (streaming, presigned URL direct upload, multipart, async processing), each with what it fixes and what it doesn't.
 - The full presigned multipart upload flow, step by step.
 - Interview traps, production limits (nginx, Cloudflare, API Gateway, Lambda), security pipeline.
-- What the popular Instagram answer gets right and misses.
 
 The page source is [`index.html`](index.html) in this folder.
