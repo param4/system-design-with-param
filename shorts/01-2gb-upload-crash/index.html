@@ -128,7 +128,7 @@ details[open] summary{margin-bottom:8px}
     <tr><th>Term</th><th>What it means</th></tr>
     <tr><td><strong>Request body</strong></td><td>The data the browser sends with a request. For an upload, the body <em>is</em> the file, all 2 GB of it.</td></tr>
     <tr><td><strong>RAM / heap</strong></td><td>The server's working memory. In Java the program's share of it is called the <em>heap</em>. If the program asks for more than it has, it crashes with <code>OutOfMemoryError</code>.</td></tr>
-    <tr><td><strong>Thread, thread pool</strong></td><td>A thread is one worker inside the server that handles one request at a time. The server keeps a fixed number of them (the <em>pool</em>, e.g. Tomcat's default of 200). If all are busy, new requests wait.</td></tr>
+    <tr><td><strong>Thread, thread pool</strong></td><td>A thread is one worker inside the server that handles one request at a time. Java servers keep a fixed number of them (the <em>pool</em>, e.g. Tomcat's default of 200). If all are busy, new requests wait. Node.js works differently (one event loop); see the Node box in section 1.</td></tr>
     <tr><td><strong>MB vs Mb</strong></td><td>File sizes are in <strong>bytes</strong> (MB, GB). Internet speeds are in <strong>bits</strong> (Mbps). 1 byte = 8 bits, so a 100 Mbps connection moves about 12.5 MB per second.</td></tr>
     <tr><td><strong>S3, bucket, object, key</strong></td><td>Amazon S3 is file storage in the cloud. A <em>bucket</em> is a top-level folder, an <em>object</em> is one stored file, and its <em>key</em> is its full path, e.g. <code>uploads/42/video.mp4</code>. Google Cloud Storage and Azure Blob work the same way.</td></tr>
     <tr><td><strong>Presigned URL</strong></td><td>A temporary link your server creates that lets someone upload (or download) one specific file to S3 without having AWS passwords. Explained in detail in fix ②.</td></tr>
@@ -156,6 +156,17 @@ details[open] summary{margin-bottom:8px}
       So each upload holds one thread for ~13 minutes. With a pool of 200 threads, 200 people uploading at once leaves <strong class="bad">zero</strong> threads for login, search or anything else.</p></div>
     <div class="card"><h3>3. Disk and network fill up</h3>
       <p>Many frameworks save big uploads to a temporary folder (<code>/tmp</code>) first, which can fill the disk. And every byte crosses your server's network twice: once coming in from the user, once going out to S3. You pay for that bandwidth and it slows everything else down.</p></div>
+  </div>
+  <div class="card"><h3>What about Node.js? It has no thread pool per request</h3>
+    <p>Java servers (Tomcat, Spring) give each request its own thread from a pool of ~200. <strong>Node works differently:</strong> one main thread, the <em>event loop</em>, juggles all connections. Reading from the network doesn't block it, so a slow upload does <em>not</em> hold a thread. But the same three resources still run out, in a different shape:</p>
+    <div class="tbl" style="margin-top:10px"><table>
+      <tr><th>Problem</th><th>Java (thread per request)</th><th>Node (event loop)</th></tr>
+      <tr><td>Slow 13-min upload</td><td>Holds 1 of ~200 threads</td><td>Holds 1 open connection (a socket). The OS caps open connections per process, often around 1,024 by default</td></tr>
+      <tr><td>Whole file in memory</td><td><code>getBytes()</code> → OutOfMemoryError</td><td><code>multer.memoryStorage()</code> or collecting the body into a Buffer → process crashes (heap out of memory)</td></tr>
+      <tr><td>Heavy work on the file</td><td>Blocks only that one thread</td><td>Blocks <strong>everyone</strong>: synchronous code like <code>fs.readFileSync</code> or hashing a 2 GB buffer freezes the single event loop, so every user waits</td></tr>
+      <tr><td>Disk writes, crypto, zip</td><td>Done on the request thread</td><td>Sent to libuv's background pool (libuv is Node's I/O library), only <strong>4 threads</strong> by default (<code>UV_THREADPOOL_SIZE</code>). Many uploads writing to disk queue up behind those 4</td></tr>
+    </table></div>
+    <p style="margin-top:10px"><span class="imp">IMP</span><strong>Node-only trap:</strong> since Node 18, the HTTP server's <code>requestTimeout</code> defaults to <strong>300 seconds</strong>. A 13-minute upload is cut off at 5 minutes, unless you raise it. One more reason to upload directly to S3.</p>
   </div>
   <p class="callout"><span class="imp">IMP</span><strong>The real problem isn't storage, it's who carries the bytes.</strong> As long as the 2 GB has to pass through your app server, a bigger server only raises the limit; it doesn't remove it. The best fix is to make sure the file never touches your server at all.</p>
 </section>
