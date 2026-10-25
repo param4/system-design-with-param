@@ -21,7 +21,7 @@ Every topic follows the same format: **theory → design → build → break it*
 ```
 01-rate-limiter/
 ├── README.md                  study notes with diagrams
-├── boards/                    every whiteboard as PNG, "initial" and "final"
+├── boards/                    every whiteboard as PNG (final version)
 │   └── rate-limiter-boards.excalidraw
 └── interactive/
     └── study-guide.html       simulators you can click (also live on GitHub Pages)
@@ -29,5 +29,5 @@ Every topic follows the same format: **theory → design → build → break it*
 
 ## Using the whiteboards
 
-- **PNG:** `*-initial.png` is the board before the lesson starts, and `*-final.png` is how it looks at the end.
+- **PNG:** `*-final.png` is each board as it looks at the end of the lesson.
 - **Excalidraw:** go to [excalidraw.com](https://excalidraw.com) and drag the `.excalidraw` file onto the canvas. Each board is a pair of frames: initial on the left, final on the right.
