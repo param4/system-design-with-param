@@ -113,31 +113,58 @@ details[open] summary{margin-bottom:8px}
 <header class="hero" style="margin-top:22px">
   <h1>2 GB upload crashes the server</h1>
   <p class="q">“A user uploads a <b>2 GB</b> file and your server <b>crashes within seconds</b>. How do you handle this in production?”</p>
+  <p class="muted">A common backend interview question. This page explains why the crash happens, the four standard fixes, the traps interviewers set, and what changes in real production systems. No prior AWS knowledge needed: every term is explained the first time it appears.</p>
   <nav class="toc">
-    <a href="#why">1 · Why it dies</a><a href="#calc">Crash simulator</a><a href="#fixes">2 · Fixes</a><a href="#multi">Multipart simulator</a>
+    <a href="#terms">0 · Terms</a><a href="#why">1 · Why it dies</a><a href="#calc">Crash simulator</a><a href="#fixes">2 · Fixes</a><a href="#flow">Full flow</a><a href="#multi">Multipart simulator</a>
     <a href="#traps">3 · Interview traps</a><a href="#prod">4 · Production depth</a><a href="#codeera">5 · Popular answer</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
   </nav>
 </header>
+
+<!-- ============ 0. TERMS ============ -->
+<section id="terms">
+  <span class="eyebrow">0 · Words used on this page</span>
+  <h2>Quick glossary</h2>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><strong>Request body</strong></td><td>The data the browser sends with a request. For an upload, the body <em>is</em> the file, all 2 GB of it.</td></tr>
+    <tr><td><strong>RAM / heap</strong></td><td>The server's working memory. In Java the program's share of it is called the <em>heap</em>. If the program asks for more than it has, it crashes with <code>OutOfMemoryError</code>.</td></tr>
+    <tr><td><strong>Thread, thread pool</strong></td><td>A thread is one worker inside the server that handles one request at a time. The server keeps a fixed number of them (the <em>pool</em>, e.g. Tomcat's default of 200). If all are busy, new requests wait.</td></tr>
+    <tr><td><strong>MB vs Mb</strong></td><td>File sizes are in <strong>bytes</strong> (MB, GB). Internet speeds are in <strong>bits</strong> (Mbps). 1 byte = 8 bits, so a 100 Mbps connection moves about 12.5 MB per second.</td></tr>
+    <tr><td><strong>S3, bucket, object, key</strong></td><td>Amazon S3 is file storage in the cloud. A <em>bucket</em> is a top-level folder, an <em>object</em> is one stored file, and its <em>key</em> is its full path, e.g. <code>uploads/42/video.mp4</code>. Google Cloud Storage and Azure Blob work the same way.</td></tr>
+    <tr><td><strong>Presigned URL</strong></td><td>A temporary link your server creates that lets someone upload (or download) one specific file to S3 without having AWS passwords. Explained in detail in fix ②.</td></tr>
+    <tr><td><strong>Multipart upload</strong></td><td>Uploading one big file as many smaller pieces (<em>parts</em>) that S3 joins back together at the end.</td></tr>
+    <tr><td><strong>ETag</strong></td><td>A fingerprint S3 returns for every part it receives. The client collects them and sends the list back at the end, so S3 knows exactly which parts make up the file.</td></tr>
+    <tr><td><strong>Proxy / load balancer</strong></td><td>Software that sits in front of your app and forwards requests to it, e.g. nginx, Cloudflare, AWS API Gateway. Each has its own size limits.</td></tr>
+    <tr><td><strong>Queue, worker</strong></td><td>A queue (SQS, Kafka) is a to-do list of jobs. A worker is a background program that picks jobs off it, so slow work doesn't make the user wait.</td></tr>
+  </table></div>
+</section>
 
 <!-- ============ 1. WHY ============ -->
 <section id="why">
   <span class="eyebrow">1 · Must-know</span>
   <h2>Why the server dies</h2>
-  <p>Three things run out, usually in this order:</p>
-  <div class="tbl"><table>
-    <tr><th>Resource</th><th>What happens</th><th>Numbers</th></tr>
-    <tr><td><strong>Memory</strong></td><td>Code reads the whole body into RAM: <code>file.getBytes()</code>, <code>readAllBytes()</code>, Express <code>multer.memoryStorage()</code>.</td><td>2 GB per upload. 10 users at once = <strong class="bad">20 GB</strong> → OutOfMemoryError.</td></tr>
-    <tr><td><strong>Threads</strong></td><td>The request keeps a worker thread busy for the whole transfer.</td><td>2 GB = 16,000 Mb. At 20 Mbps: <strong class="bad">800 s ≈ 13 min</strong> per upload.</td></tr>
-    <tr><td><strong>Disk / bandwidth</strong></td><td>Big bodies spool to <code>/tmp</code>; the proxy may buffer them too. Every byte crosses your network card twice.</td><td>In from the user, out to storage.</td></tr>
-  </table></div>
-  <p class="callout"><span class="imp">IMP</span><strong>It's not a storage problem, it's a “who carries the bytes” problem.</strong> While the 2 GB flows through your app server, a bigger machine only moves the limit.</p>
+  <p>Picture the simplest upload endpoint: the browser sends the file to <code>POST /upload</code>, the server reads the whole file, then saves it to S3. It works perfectly in testing with a 2 MB photo. With a 2 GB video, three things go wrong:</p>
+
+  <div class="stack">
+    <div class="card"><h3>1. Memory runs out</h3>
+      <p>Code like <code>file.getBytes()</code> (Java), <code>readAllBytes()</code>, or <code>multer.memoryStorage()</code> (Node) copies the <em>entire</em> file into RAM before doing anything with it.</p>
+      <p style="margin-top:8px"><strong>Example:</strong> one 2 GB upload needs 2 GB of RAM. If 10 users upload at the same time, that's <strong class="bad">20 GB</strong>. A typical server has 4–16 GB, so it crashes with <code>OutOfMemoryError</code>, and every other user's request dies with it.</p></div>
+    <div class="card"><h3>2. Threads get stuck</h3>
+      <p>While a file is uploading, the thread handling that request can't do anything else. Uploads are slow, so threads stay busy for a long time.</p>
+      <p style="margin-top:8px"><strong>Example:</strong> how long does 2 GB take on a 20 Mbps home connection?<br>
+      2 GB = 2,000 MB → × 8 bits = <strong>16,000 Mb</strong> → ÷ 20 Mb per second = <strong>800 s ≈ 13 min</strong>.<br>
+      So each upload holds one thread for ~13 minutes. With a pool of 200 threads, 200 people uploading at once leaves <strong class="bad">zero</strong> threads for login, search or anything else.</p></div>
+    <div class="card"><h3>3. Disk and network fill up</h3>
+      <p>Many frameworks save big uploads to a temporary folder (<code>/tmp</code>) first, which can fill the disk. And every byte crosses your server's network twice: once coming in from the user, once going out to S3. You pay for that bandwidth and it slows everything else down.</p></div>
+  </div>
+  <p class="callout"><span class="imp">IMP</span><strong>The real problem isn't storage, it's who carries the bytes.</strong> As long as the 2 GB has to pass through your app server, a bigger server only raises the limit; it doesn't remove it. The best fix is to make sure the file never touches your server at all.</p>
 </section>
 
 <!-- ============ CRASH SIM ============ -->
 <section id="calc">
   <span class="eyebrow">Interactive</span>
   <h2>Crash simulator</h2>
-  <p class="muted">Pick how the server handles the upload, then drag the sliders. Watch which resource breaks first.</p>
+  <p class="muted">Choose how the server handles uploads, then drag the sliders. The three meters show RAM, threads and network use on your server; the message at the bottom says what breaks first. Try “Stream through server” with 300+ users to see that streaming alone isn't enough.</p>
   <div class="sim">
     <div class="sim-h">
       <div class="seg" role="group" aria-label="Upload approach">
@@ -183,20 +210,47 @@ details[open] summary{margin-bottom:8px}
     </div>
     <div class="verdict" id="verdict"></div>
   </div>
+
 </section>
 
 <!-- ============ 2. FIXES ============ -->
 <section id="fixes">
   <span class="eyebrow">2 · Must-know</span>
-  <h2>The four fixes, in order of impact</h2>
+  <h2>The four fixes, from weakest to strongest</h2>
   <div class="stack">
-    <div class="card"><h3>① Streaming <span class="muted" style="font-size:.85rem">(if bytes must pass through you)</span></h3><p>Read the body as an <code>InputStream</code> and pipe it onward in small chunks. Memory = buffer size, not file size. <span class="warn">Fixes RAM only</span>: the 13-minute thread hold and double bandwidth stay.</p></div>
-    <div class="card"><h3><span class="imp">IMP</span>② Presigned URL: direct upload</h3><p>The server only checks “is this user allowed?” and signs a short-lived URL for <em>one exact object key</em>. The browser uploads straight to S3 (or GCS / Azure Blob). Your server handles two tiny JSON calls instead of 2 GB. <span class="ok">Fixes RAM, threads, bandwidth and cost together.</span></p></div>
-    <div class="card"><h3>③ Multipart upload</h3><p>Split into parts (e.g. 2 GB → 21 parts of 100 MB) and upload them in parallel. A network drop costs one part, not the whole file. Resume is possible. Try it in the simulator below.</p></div>
-    <div class="card"><h3>④ Async processing</h3><p>When the upload completes, S3 fires an event → queue → worker does virus scan, transcode, thumbnails. The user sees “Processing…” instead of a hanging request.</p></div>
-  </div>
 
-  <h3 style="margin-top:10px">The full flow: presigned multipart upload</h3>
+    <div class="card"><h3>① Streaming</h3>
+      <p><strong>What it is:</strong> instead of reading the whole file and then saving it, the server reads a small chunk (say 8 MB), forwards it to S3, then reads the next chunk, like passing buckets along a line instead of filling a swimming pool first.</p>
+      <p style="margin-top:8px"><strong>What it fixes:</strong> memory. Each upload now uses only one chunk's worth of RAM, no matter how big the file is.</p>
+      <p style="margin-top:8px" class="warn"><strong>What it doesn't fix:</strong> the thread is still busy for the full 13 minutes, and the 2 GB still crosses your network twice.</p></div>
+
+    <div class="card"><h3><span class="imp">IMP</span>② Presigned URL: upload directly to S3</h3>
+      <p><strong>What it is:</strong> the browser first asks your server, “may I upload this file?” Your server checks the user is logged in and allowed, then creates a <strong>presigned URL</strong>: a normal-looking S3 link with a signature attached. The browser uploads the file straight to S3 using that link. Your server never sees the 2 GB.</p>
+      <p style="margin-top:8px"><strong>Analogy:</strong> a gate pass. Security (your server) doesn't carry your furniture into the building; it writes you a signed pass that says “flat 42 only, valid until 6 pm”. The building (S3) checks the signature and lets you in.</p>
+      <p style="margin-top:8px"><strong>What's inside the link:</strong> which bucket and file path it's for, whether it allows upload or download, an expiry time, and a signature made with your server's AWS credentials. Change any of these and S3 rejects it.</p>
+      <p style="margin-top:8px"><strong>How long can it last?</strong> It can never outlive the credentials that signed it:</p>
+      <ul style="margin-top:6px">
+        <li>Signed with a permanent access key (an IAM user's key): up to <strong>7 days</strong>, AWS's maximum.</li>
+        <li>Signed with temporary credentials, which is what servers normally use (an IAM role on EC2, ECS or Lambda): the link dies when those credentials expire, often within <strong>1–6 hours</strong>, even if you asked for 7 days.</li>
+        <li>In practice set it to <strong>5–15 minutes</strong>. Anyone who gets hold of the link can use it until then.</li>
+      </ul>
+      <p style="margin-top:8px" class="ok"><strong>What it fixes:</strong> memory, threads, bandwidth and cost, all at once. Your server only handles two tiny requests (“may I upload?” and “I'm done”).</p></div>
+
+    <div class="card"><h3>③ Multipart upload</h3>
+      <p><strong>What it is:</strong> split the file into parts and upload several at the same time. Example: 2 GB with 100 MB parts = <strong>21 parts</strong>; upload 4 at once.</p>
+      <p style="margin-top:8px"><strong>Why it matters:</strong> if the Wi-Fi drops while part 14 is uploading, only part 14 is sent again (100 MB), not the whole 2 GB. If the user closes the laptop, the upload can resume from the parts already done. Parallel parts also use the connection better.</p>
+      <p style="margin-top:8px">S3 needs this anyway above <strong>5 GB</strong>, the most a single upload request can carry. Try it in the simulator below.</p></div>
+
+    <div class="card"><h3>④ Async processing</h3>
+      <p><strong>What it is:</strong> after the upload, the file usually needs work: virus scan, video conversion, thumbnails. Instead of doing that inside the request (making the user wait), S3 sends an “object created” event to a queue, and a background worker does the job.</p>
+      <p style="margin-top:8px"><strong>What the user sees:</strong> “Uploaded ✓ · Processing…” immediately, then a notification when it's ready.</p></div>
+  </div>
+</section>
+
+<section id="flow">
+  <span class="eyebrow">2 · Must-know</span>
+  <h2>The full flow: presigned multipart upload</h2>
+  <p>This is the complete answer an interviewer wants. Only the green arrows carry the actual file, and none of them pass through your API server.</p>
   <div class="diagram">
     <svg viewBox="0 0 760 470" role="img" aria-label="Sequence: client, API server, S3, queue and worker">
       <defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"/></marker>
@@ -224,16 +278,25 @@ details[open] summary{margin-bottom:8px}
       <rect x="236" y="70" width="0" height="0"/>
     </svg>
   </div>
-  <p class="cap">Only the green arrows carry the file, and none of them touch your API server. The object key is chosen by the server: <code>uploads/{userId}/{uuid}</code>.</p>
+  <ol>
+    <li><strong>Client → API:</strong> “I want to upload <code>video.mp4</code>, 2 GB, type video/mp4.” Sending the size and type first lets the server reject a bad file before a single byte is uploaded.</li>
+    <li><strong>API → S3: <code>CreateMultipartUpload</code>.</strong> S3 opens an upload session and returns an <code>uploadId</code>, a ticket number that ties all the parts together. The <em>server</em> picks the file path, e.g. <code>uploads/{userId}/{random-id}</code>, so a user can't overwrite someone else's file.</li>
+    <li><strong>API → Client:</strong> one presigned URL per part (21 URLs for 2 GB in 100 MB parts). These are a few KB of text.</li>
+    <li><strong>Client → S3:</strong> uploads the parts in parallel using those URLs. For each part S3 replies with an <strong>ETag</strong> (that part's fingerprint); the client keeps the list.</li>
+    <li><strong>Client → API:</strong> “all parts done, here are the 21 ETags.”</li>
+    <li><strong>API → S3: <code>CompleteMultipartUpload</code>.</strong> S3 stitches the parts into one file.</li>
+    <li><strong>API → S3: <code>HeadObject</code>.</strong> Reads the stored file's details (size, checksum) to confirm it really is the file the user said it was. Never trust the client's word alone.</li>
+    <li><strong>S3 → Queue → Worker:</strong> the “object created” event triggers the scan and processing in the background.</li>
+  </ol>
 
-  <h3 style="margin-top:10px"><span class="imp">IMP</span>S3 numbers to remember</h3>
+  <h3 style="margin-top:8px"><span class="imp">IMP</span>S3 numbers to remember</h3>
   <div class="tbl"><table>
-    <tr><th>Fact</th><th>Value</th></tr>
-    <tr><td>Max single PUT</td><td><strong>5 GB</strong> (AWS suggests multipart from ~100 MB)</td></tr>
-    <tr><td>Part size</td><td><strong>5 MiB – 5 GiB</strong> (last part can be smaller)</td></tr>
-    <tr><td>Max parts per upload</td><td><strong>10,000</strong></td></tr>
-    <tr><td>Max object size</td><td><strong>48.8 TiB</strong></td></tr>
-    <tr><td>Presigned URL max life</td><td><strong>7 days</strong> (SigV4, IAM user). Role/STS creds: dies when the creds expire (EC2 role ~6 h, AssumeRole default 1 h)</td></tr>
+    <tr><th>Fact</th><th>Value</th><th>What it means for you</th></tr>
+    <tr><td>Max single upload</td><td><strong>5 GB</strong></td><td>Anything bigger <em>must</em> use multipart. AWS suggests multipart from ~100 MB.</td></tr>
+    <tr><td>Part size</td><td><strong>5 MiB – 5 GiB</strong></td><td>Every part except the last must be at least 5 MiB (about 5.2 MB).</td></tr>
+    <tr><td>Max parts</td><td><strong>10,000</strong></td><td>Part size × 10,000 must cover the file. For 1 TB, parts must be ≥ ~100 MB.</td></tr>
+    <tr><td>Max file size</td><td><strong>48.8 TiB</strong></td><td>Effectively unlimited for user uploads.</td></tr>
+    <tr><td>Presigned URL life</td><td><strong>≤ 7 days</strong></td><td>Less if signed with temporary credentials (see fix ②). Use minutes, not days.</td></tr>
   </table></div>
 </section>
 
@@ -241,7 +304,7 @@ details[open] summary{margin-bottom:8px}
 <section id="multi">
   <span class="eyebrow">Interactive</span>
   <h2>Multipart simulator</h2>
-  <p class="muted">Start the upload, then hit <strong>Drop network</strong> halfway. Compare how much has to be sent again.</p>
+  <p class="muted">Press Start, then press <strong>Drop network</strong> halfway through. Each square is one part. Compare “Re-sent because of drops” for Single PUT (one big request) and Multipart: a drop costs Single PUT everything uploaded so far, but Multipart only the parts that were in flight.</p>
   <div class="sim">
     <div class="sim-h">
       <div class="seg" role="group" aria-label="Upload type">
@@ -268,6 +331,7 @@ details[open] summary{margin-bottom:8px}
     </div>
     <div class="verdict" id="mv" style="display:none"></div>
   </div>
+
 </section>
 
 <!-- ============ 3. TRAPS ============ -->
@@ -275,13 +339,26 @@ details[open] summary{margin-bottom:8px}
   <span class="eyebrow">3 · Interview traps</span>
   <h2>Answers that sound right but aren't</h2>
   <div class="stack">
-    <div class="card"><h3 class="bad">“Just increase max-file-size to 2 GB.”</h3><p>That removes a guard. Spring Boot's defaults are <code>max-file-size=1MB</code>, <code>max-request-size=10MB</code> on purpose. Raising them without streaming invites the crash.</p></div>
-    <div class="card"><h3 class="bad">“Use S3.”</h3><p>If the bytes go browser → your server → S3, S3 changed nothing about RAM, threads or bandwidth. Say <strong>direct</strong> upload.</p></div>
-    <div class="card"><h3 class="bad">“Presigned URLs are secure.”</h3><p>A presigned URL is a <strong>bearer token</strong>: anyone holding it can use it, many times, until it expires. Keep expiry short (5–15 min), scope it to one server-chosen key, never let the client pick the path. S3 silently replaces an existing object with the same key.</p></div>
-    <div class="card"><h3 class="bad">“The UI blocks files over 2 GB.”</h3><p>A presigned <strong>PUT</strong> doesn't cap size by itself. Use a presigned <strong>POST</strong> with <code>["content-length-range", min, max]</code>, or presign each part (part count × part size caps the total). Always verify with <code>HeadObject</code> after upload.</p></div>
-    <div class="card"><h3 class="bad">“Client said upload done, so it's done.”</h3><p>Never trust it. Check the object exists, the size matches what you approved, and the checksum matches (SigV4 supports CRC32, CRC32C, SHA-256 and more).</p></div>
-    <div class="card"><h3 class="bad">“Streaming solves it.”</h3><p>Memory only. The thread is still held for ~13 minutes and every byte still crosses your network card twice. Try “Stream through server” in the crash simulator with 500 users.</p></div>
-    <div class="card"><h3 class="warn">“URL expires mid-upload → upload breaks?”</h3><p>No. S3 checks expiry when the request <strong>starts</strong>. A part that started before expiry finishes. A retry after expiry fails, so the client asks for a fresh URL.</p></div>
+    <div class="card"><h3 class="bad">“Just increase max-file-size to 2 GB.”</h3>
+      <p><strong>Why it's wrong:</strong> Spring Boot rejects files over 1 MB by default (<code>max-file-size=1MB</code>, <code>max-request-size=10MB</code>). That limit is a safety guard. Raising it to 2 GB doesn't make the server able to handle 2 GB; it just lets the 2 GB in, and then the memory problem crashes it.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> keep the guard on the API, and send big files directly to S3.</p></div>
+    <div class="card"><h3 class="bad">“Store it in S3.”</h3>
+      <p><strong>Why it's incomplete:</strong> if the file still goes browser → your server → S3, your server still holds the RAM, the thread and the bandwidth. S3 only changed where the file ends up.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> upload <em>directly</em> from the browser to S3 with presigned URLs.</p></div>
+    <div class="card"><h3 class="bad">“Presigned URLs are secure.”</h3>
+      <p><strong>Why it's risky:</strong> a presigned URL works like cash. Whoever holds it can use it, as many times as they like, until it expires. Nobody checks <em>who</em> is using it. If it leaks (logs, browser history, a shared screenshot), someone else can upload.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> short expiry (5–15 min), one exact file path chosen by the server, and never let the client choose the path, because S3 silently replaces an existing file with the same path.</p></div>
+    <div class="card"><h3 class="bad">“The frontend blocks files over 2 GB.”</h3>
+      <p><strong>Why it's wrong:</strong> anyone can skip your frontend and call S3 directly with the URL. And a plain presigned upload URL doesn't limit size by itself.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> enforce the limit in what you sign. Either a presigned <strong>POST</strong> with a <code>content-length-range</code> rule (S3 rejects files outside that range), or presign a fixed number of parts (21 parts × 100 MB can't exceed ~2 GB). Then check the real size with <code>HeadObject</code> after upload.</p></div>
+    <div class="card"><h3 class="bad">“The client said it's done, so it's done.”</h3>
+      <p><strong>Why it's wrong:</strong> the client could be buggy or malicious. It might claim a 2 GB video and upload a 5 KB script.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> after completion the server checks with S3 that the file exists, has the approved size, and its checksum (a hash of the content) matches.</p></div>
+    <div class="card"><h3 class="bad">“Streaming solves it.”</h3>
+      <p><strong>Why it's incomplete:</strong> streaming fixes memory only. The thread is still busy for ~13 minutes per upload and the bytes still cross your network twice.</p>
+      <p style="margin-top:8px"><strong>Say instead:</strong> streaming is the fallback when bytes <em>must</em> pass through you; direct upload is the real fix.</p></div>
+    <div class="card"><h3 class="warn">“What if the link expires mid-upload?”</h3>
+      <p>S3 checks the expiry only when a request <strong>starts</strong>. A part that started before expiry will finish. But if a part fails and is retried after expiry, S3 rejects it, so the client asks your server for a fresh URL for that part.</p></div>
   </div>
 </section>
 
@@ -289,6 +366,7 @@ details[open] summary{margin-bottom:8px}
 <section id="prod">
   <span class="eyebrow">4 · Production depth</span>
   <h2>Limits you hit before your code even runs</h2>
+  <p>In production your app sits behind several layers (CDN, proxy, gateway). Each one has its own default size limit, so a 2 GB upload is usually rejected long before it reaches your code.</p>
   <div class="diagram">
     <svg viewBox="0 0 760 150" role="img" aria-label="Upload passes through layers, each with its own size limit">
       <defs><marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
@@ -304,32 +382,33 @@ details[open] summary{margin-bottom:8px}
     </svg>
   </div>
   <div class="tbl"><table>
-    <tr><th>Layer</th><th>Limit</th></tr>
-    <tr><td>nginx</td><td><code>client_max_body_size</code> default <strong>1m</strong> → 413. <code>proxy_request_buffering on</code> (default) reads the <strong>whole body</strong> before passing it on; set <code>off</code> on streaming upload routes.</td></tr>
-    <tr><td>AWS API Gateway</td><td>Max payload <strong>10 MB</strong></td></tr>
-    <tr><td>AWS Lambda</td><td>Sync request payload <strong>6 MB</strong></td></tr>
-    <tr><td>Cloudflare</td><td>Request body cap <strong>100 MB</strong> on Free/Pro plans</td></tr>
-    <tr><td>Java</td><td>A <code>byte[]</code> holds at most ~2<sup>31</sup> bytes (~2 GiB), so <code>getBytes()</code> on a 2+ GiB file fails even with free heap</td></tr>
+    <tr><th>Layer</th><th>Default limit</th><th>What the user sees</th></tr>
+    <tr><td>nginx</td><td><code>client_max_body_size</code> = <strong>1 MB</strong></td><td><code>413 Request Entity Too Large</code>. Also, by default nginx reads the <em>whole</em> body before forwarding it (<code>proxy_request_buffering on</code>), so even streaming apps receive nothing until nginx has the full file.</td></tr>
+    <tr><td>Cloudflare</td><td><strong>100 MB</strong> per request (Free/Pro plans)</td><td>413 error from Cloudflare.</td></tr>
+    <tr><td>AWS API Gateway</td><td><strong>10 MB</strong> per request</td><td>413 error; can't be raised.</td></tr>
+    <tr><td>AWS Lambda</td><td><strong>6 MB</strong> request payload</td><td>The function is never invoked.</td></tr>
+    <tr><td>Java</td><td>A byte array holds at most ~<strong>2 GiB</strong></td><td><code>getBytes()</code> on a bigger file fails even if RAM is free.</td></tr>
   </table></div>
-  <p class="callout"><span class="imp">IMP</span>These limits are why serverless and CDN-fronted apps <strong>must</strong> upload directly to storage. There is no “just make it bigger” option.</p>
+  <p class="callout"><span class="imp">IMP</span>This is why serverless and CDN-fronted apps <strong>must</strong> upload directly to storage. For them there is no “just raise the limit” option.</p>
 
   <h3>Abandoned uploads cost money</h3>
-  <p>Parts of a multipart upload that never completes stay in the bucket and are billed. Add a lifecycle rule <code>AbortIncompleteMultipartUpload</code> (e.g. <code>DaysAfterInitiation: 1</code>).</p>
+  <p>If a user starts a multipart upload and never finishes, the parts already uploaded stay in S3, invisible in the normal file list, and <strong>you're billed for them</strong>. Fix: a bucket lifecycle rule <code>AbortIncompleteMultipartUpload</code> (e.g. after 1 day), which tells S3 to delete unfinished uploads automatically.</p>
 
-  <h3>Resume after the user closes the laptop</h3>
+  <h3>Resuming after the user closes the laptop</h3>
   <ul>
-    <li><strong>S3:</strong> store the <code>uploadId</code>; <code>ListParts</code> returns which parts already landed; upload only the rest.</li>
-    <li><strong>tus protocol</strong> (open standard): <code>HEAD</code> returns <code>Upload-Offset</code> (bytes the server has); the client <code>PATCH</code>es the rest from that offset. Used by Vimeo, Cloudflare Stream, Supabase.</li>
+    <li><strong>With S3:</strong> save the <code>uploadId</code> (e.g. in the browser's storage). When the user returns, call <code>ListParts</code>, which lists the parts S3 already has, and upload only the missing ones.</li>
+    <li><strong>With tus:</strong> an open protocol built just for resumable uploads. The client asks “how many bytes do you have?” (<code>HEAD</code> → <code>Upload-Offset: 1,200,000,000</code>) and sends the rest from that point (<code>PATCH</code>). Used by Vimeo, Cloudflare Stream and Supabase.</li>
   </ul>
 
-  <h3>Choosing part size</h3>
+  <h3>How big should each part be?</h3>
   <ul>
-    <li>More parts = finer retries, more requests. Fewer parts = bigger retries.</li>
-    <li>2 GB: 64–100 MB parts. Minimum 5 MiB, max 10,000 parts, so a 1 TB file needs parts of at least ~100 MB.</li>
-    <li>3–6 parallel parts per client is usually enough; more just shares the same uplink.</li>
+    <li><strong>Smaller parts:</strong> a failure costs less to redo, but you make more requests.</li>
+    <li><strong>Bigger parts:</strong> fewer requests, but a failure costs more.</li>
+    <li><strong>For 2 GB:</strong> 64–100 MB parts (20–32 parts) is a good balance.</li>
+    <li><strong>Parallel parts:</strong> 3–6 at a time is enough. More doesn't help, because they all share the same home connection.</li>
   </ul>
 
-  <h3>Security pipeline</h3>
+  <h3>Don't trust the file: the security pipeline</h3>
   <div class="diagram">
     <svg viewBox="0 0 760 120" role="img" aria-label="quarantine, scan, clean, serve">
       <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
@@ -343,33 +422,34 @@ details[open] summary{margin-bottom:8px}
     </svg>
   </div>
   <ul>
-    <li>Check the real type from the file's bytes (magic number), not the extension or client <code>Content-Type</code>.</li>
-    <li>Unzip/process inside size and time limits (zip bomb: 1 KB archive → GBs).</li>
-    <li>Rate-limit the “create upload” endpoint per user so nobody farms URLs to fill your bucket.</li>
-    <li>Downloads mirror the problem: serve with a presigned <strong>GET</strong> or a CDN, never through the app.</li>
+    <li><strong>Quarantine first:</strong> new uploads land in a separate folder (<code>quarantine/</code>) that is never served to anyone. Only after the scan passes is the file moved to <code>clean/</code>.</li>
+    <li><strong>Check the real type:</strong> a file named <code>photo.jpg</code> can be anything. Check the first bytes of the file (the “magic number”: every JPEG starts with <code>FF D8 FF</code>, every PDF with <code>%PDF</code>), not the name or what the browser claims.</li>
+    <li><strong>Zip bombs:</strong> a tiny archive (a few KB) can expand to many GB when unzipped and crash the worker. Always unzip with a size limit and a time limit.</li>
+    <li><strong>Rate-limit</strong> the “give me an upload URL” endpoint per user, so nobody can request thousands of URLs and fill your bucket.</li>
+    <li><strong>Downloads have the same problem in reverse:</strong> serve big files with a presigned <em>download</em> link or a CDN, never by reading them through your app.</li>
   </ul>
 
-  <h3>Other stacks, same trap</h3>
+  <h3>Same trap in other languages</h3>
   <ul>
-    <li><strong>Node/Express:</strong> <code>multer.memoryStorage()</code> = whole file in RAM; use disk storage or stream with busboy. <code>express.json()</code> default limit is 100 kb.</li>
-    <li><strong>Python:</strong> Django keeps uploads under 2.5 MB in memory, bigger ones go to a temp file; FastAPI <code>UploadFile</code> spools to disk past ~1 MB. Fine for medium files, still wrong for 2 GB through the app.</li>
+    <li><strong>Node/Express:</strong> <code>multer.memoryStorage()</code> keeps the whole file in RAM. Use disk storage, or stream with <code>busboy</code>. (For JSON bodies, <code>express.json()</code> rejects anything over 100 KB by default.)</li>
+    <li><strong>Python:</strong> Django keeps uploads under 2.5 MB in memory and writes bigger ones to a temp file; FastAPI's <code>UploadFile</code> switches to a temp file above ~1 MB. That's safe for medium files, but a 2 GB file still passes through your server.</li>
   </ul>
 </section>
 
 <!-- ============ 5. CODEERA ============ -->
 <section id="codeera">
   <span class="eyebrow">5 · The popular answer</span>
-  <h2>Where codeera's answer falls short</h2>
-  <p class="muted">Source: <a href="https://www.instagram.com/reel/DWlj0GsgPAJ/">codeera.tech reel</a> (57K views), related <a href="https://www.instagram.com/reel/DV7gXzFDKCb/">reel</a> (49K).</p>
+  <h2>What codeera's answer gets right and misses</h2>
+  <p class="muted">Source: <a href="https://www.instagram.com/reel/DWlj0GsgPAJ/">codeera.tech reel</a> (57K views), related <a href="https://www.instagram.com/reel/DV7gXzFDKCb/">reel</a> (49K). His six points, checked:</p>
   <div class="tbl"><table>
     <tr><th>His point</th><th>Verdict</th></tr>
-    <tr><td>Don't load the whole file into memory</td><td class="ok">✅ Correct</td></tr>
-    <tr><td>Stream in chunks</td><td><span class="ok">✅ Correct</span>, but memory is the only thing it fixes. The thread hold and double bandwidth stay</td></tr>
-    <tr><td>Set <code>max-file-size=2GB</code></td><td><span class="warn">⚠️ Misleading</span>: that <em>raises</em> Spring's 1 MB default. It's a guard, not a fix; the real cap belongs in the signed policy</td></tr>
-    <tr><td>Presigned URLs “remove bottlenecks completely”</td><td><span class="warn">⚠️ Right idea</span>; missing the bearer-token risk, short expiry, server-chosen key, size cap, verify after upload</td></tr>
-    <tr><td>Multipart, parallel + resume</td><td><span class="ok">✅ Correct</span>; missing the numbers (5 MiB, 10,000 parts) and the bill for abandoned parts</td></tr>
-    <tr><td>Async processing</td><td><span class="ok">✅ Correct</span>; missing quarantine + scan before serving</td></tr>
-    <tr><td><em>Not mentioned</em></td><td>Proxy/gateway limits, why it crashes (concurrency × size), checksum verification, tus</td></tr>
+    <tr><td>Don't load the whole file into memory</td><td class="ok">✅ Correct.</td></tr>
+    <tr><td>Stream in chunks</td><td><span class="ok">✅ Correct</span>, but it only fixes memory. The 13-minute thread hold and double bandwidth remain.</td></tr>
+    <tr><td>Set <code>max-file-size=2GB</code></td><td><span class="warn">⚠️ Misleading.</span> That <em>raises</em> Spring's 1 MB safety limit. It lets the big file in rather than protecting you. The real size limit belongs in the signed upload URL.</td></tr>
+    <tr><td>Presigned URLs “remove bottlenecks completely”</td><td><span class="warn">⚠️ Right idea, missing the risks:</span> the URL works for anyone who has it, needs a short expiry, a server-chosen path, a size limit, and a check after upload.</td></tr>
+    <tr><td>Multipart: parallel + resume</td><td><span class="ok">✅ Correct.</span> Missing the numbers (5 MiB minimum part, 10,000 parts max) and the bill for abandoned uploads.</td></tr>
+    <tr><td>Async processing</td><td><span class="ok">✅ Correct.</span> Missing quarantine and virus scan before the file is served.</td></tr>
+    <tr><td><em>Not mentioned at all</em></td><td>Why it crashes (users × file size), proxy/gateway limits (nginx 1 MB, API Gateway 10 MB, Lambda 6 MB), checksum verification, resumable protocols (tus).</td></tr>
   </table></div>
 </section>
 
@@ -378,11 +458,11 @@ details[open] summary{margin-bottom:8px}
   <span class="eyebrow">6 · Self-quiz</span>
   <h2>Check yourself (tap to reveal)</h2>
   <div class="stack">
-    <details><summary>1. Streaming is in place and memory is flat, but the server stops accepting requests during big uploads. Why?</summary><p>Each upload still holds a worker thread for the whole transfer (~13 min for 2 GB at 20 Mbps). A few concurrent uploads exhaust the pool.</p></details>
-    <details><summary>2. You hand out a presigned PUT URL valid for 1 hour. What two things can go wrong?</summary><p>Anyone with the URL can upload, repeatedly, until expiry (bearer token). And a plain PUT doesn't cap size. Fix: short expiry, server-chosen key, POST policy with content-length-range or per-part presigning, verify with HeadObject.</p></details>
-    <details><summary>3. A 2 GB upload in 20 parts fails at part 14 because the network dropped. What does the client re-upload?</summary><p>Only part 14 (plus any parts in flight), using the same uploadId. ListParts tells it which parts S3 already has.</p></details>
-    <details><summary>4. Your S3 bill keeps growing but the object count doesn't. Likely cause?</summary><p>Incomplete multipart uploads: their parts are stored and billed but never become objects. Add an AbortIncompleteMultipartUpload lifecycle rule.</p></details>
-    <details><summary>5. Your app runs on Lambda behind API Gateway. Can you accept a 2 GB upload with streaming?</summary><p>No. API Gateway caps payloads at 10 MB and Lambda's sync payload at 6 MB. Direct-to-S3 with presigned URLs is the only option.</p></details>
+    <details><summary>1. You added streaming and memory is now flat, but during big uploads the server stops answering other requests. Why?</summary><p>Each upload still occupies one thread for the whole transfer, about 13 minutes for 2 GB at 20 Mbps. When enough uploads run at once, all threads in the pool are busy and every other request (login, search) has to wait.</p></details>
+    <details><summary>2. You give users a presigned upload URL valid for 1 hour. What two things can go wrong?</summary><p>(a) The URL works for anyone who has it: if it leaks, someone else can upload, again and again, for an hour. (b) A plain presigned upload URL doesn't limit file size, so someone could upload far more than 2 GB. Fix: 5–15 minute expiry, a server-chosen path, a size limit in the signature (POST policy or fixed number of parts), and a size check after upload.</p></details>
+    <details><summary>3. A 2 GB upload is split into 21 parts. The Wi-Fi drops while part 14 is uploading. What gets uploaded again?</summary><p>Only part 14 (and any other parts that were mid-upload at that moment). The parts already finished are safe in S3 under the same <code>uploadId</code>; <code>ListParts</code> tells the client which ones they are.</p></details>
+    <details><summary>4. Your S3 bill keeps growing, but the number of files stays the same. What's a likely cause?</summary><p>Unfinished multipart uploads. Their parts are stored and billed but never become visible files. A lifecycle rule <code>AbortIncompleteMultipartUpload</code> deletes them automatically after a set number of days.</p></details>
+    <details><summary>5. Your backend runs on AWS Lambda behind API Gateway. Can you accept a 2 GB upload by streaming it?</summary><p>No. API Gateway rejects requests over 10 MB and Lambda over 6 MB, before your code even runs. The only way is a direct upload to S3 with presigned URLs.</p></details>
   </div>
 </section>
 
@@ -390,7 +470,7 @@ details[open] summary{margin-bottom:8px}
 <section id="pick">
   <span class="eyebrow">7 · For the short</span>
   <h2>Pick the points to keep</h2>
-  <p class="muted">Ticks are saved in this browser. Hit “Copy my picks” and paste them to me.</p>
+  <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
   <div class="stack checks" id="checks"></div>
   <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
 </section>
@@ -399,7 +479,7 @@ details[open] summary{margin-bottom:8px}
   <span class="eyebrow">Sources</span>
   <ul class="muted">
     <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html">S3 multipart upload limits</a> · <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html">Multipart overview</a></li>
-    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">S3 presigned URLs: expiry, bearer-token note</a></li>
+    <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">S3 presigned URLs: expiry and credentials</a></li>
     <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html">S3 POST policy (content-length-range)</a></li>
     <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpu-abort-incomplete-mpu-lifecycle-config.html">Abort incomplete multipart uploads</a></li>
     <li><a href="https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_request_buffering">nginx proxy_request_buffering</a> · <a href="https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size">client_max_body_size</a></li>
