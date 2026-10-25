@@ -10,6 +10,12 @@ Every topic follows the same format: **theory → design → build → break it*
 |---|---|---|---|---|---|
 | 01 | [Rate limiter](01-rate-limiter/) | [▶ watch](https://www.youtube.com/watch?v=J5wziH5OAZM) | [study notes](01-rate-limiter/README.md) · [live simulators](https://param4.github.io/system-design-with-param/01-rate-limiter/interactive/study-guide.html) | [18 boards](01-rate-limiter/boards/) | coming in Part 2 |
 
+## Shorts: study notes
+
+| # | Question | Notes |
+|---|---|---|
+| 01 | [2 GB upload crashes the server](shorts/01-2gb-upload-crash/) | [read on the web](https://param4.github.io/system-design-with-param/shorts/01-2gb-upload-crash/) |
+
 ## How each folder is laid out
 
 ```
