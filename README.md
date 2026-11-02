@@ -15,6 +15,8 @@ Every topic follows the same format: **theory → design → build → break it*
 | # | Question | Notes |
 |---|---|---|
 | 01 | [2 GB upload crashes the server](shorts/01-2gb-upload-crash/) | [read on the web](https://param4.github.io/system-design-with-param/shorts/01-2gb-upload-crash/) |
+| 03 | [API returns 1 million records, server dies](shorts/03-million-records-api/) | [read on the web](https://param4.github.io/system-design-with-param/shorts/03-million-records-api/) |
+| 04 | [Bloom filter: check 1 billion usernames in about 1 GB](shorts/04-bloom-filter/) | [read on the web](https://param4.github.io/system-design-with-param/shorts/04-bloom-filter/) |
 
 ## How each folder is laid out
 

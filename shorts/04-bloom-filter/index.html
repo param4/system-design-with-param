@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bloom Filter Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Dark-first study page; light theme via the toggle. Brand = navy + cyan + violet (same as 01-rate-limiter). */
+:root{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.14); --bad-soft:rgba(248,113,113,.12); --ok-soft:rgba(52,211,153,.12);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10); --bad-soft:rgba(220,38,38,.08); --ok-soft:rgba(21,128,61,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:1.7;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 16px 90px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2rem)}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--cyan)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0;padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px;padding-top:60px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.callout{border-left:3px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:0 10px 10px 0}
+.bad{color:var(--bad)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{font:500 .82rem var(--f-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--cyan);outline:none}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn[aria-pressed="true"]{background:var(--cyan-soft);border-color:var(--cyan);color:var(--cyan)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font:.78rem var(--f-mono);text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover{border-color:var(--cyan)}
+.hero{display:flex;flex-direction:column;gap:16px}
+.q{font-size:1.2rem;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px 18px}
+.q b{color:var(--bad)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);fill:var(--ink)}
+.diagram{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:12px}
+.cap{font-size:.86rem;color:var(--muted);margin-top:6px}
+/* sim panels */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px}
+.sim-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.ctl label{display:flex;justify-content:space-between;font:.78rem var(--f-mono);color:var(--muted)}
+.ctl label b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--cyan)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.meter{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px}
+.meter .k{font:.72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.meter .v{font:600 1.35rem var(--f-display);margin:2px 0 8px}
+.bar{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .35s,background .35s}
+.verdict{font:600 1rem var(--f-display);padding:12px 14px;border-radius:10px}
+.verdict.badv{background:var(--bad-soft);color:var(--bad)}
+.verdict.okv{background:var(--ok-soft);color:var(--ok)}
+.verdict.warnv{background:rgba(251,191,36,.12);color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:4px}
+.tile{height:26px;border-radius:4px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
+.tile i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.tile.done i{background:var(--ok);width:100%!important}
+.tile.fail{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.single{height:34px;border-radius:6px;background:var(--bg);border:1px solid var(--line);overflow:hidden;position:relative}
+.single i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.stats{display:flex;flex-wrap:wrap;gap:18px;font:.84rem var(--f-mono);color:var(--muted)}
+.stats b{color:var(--ink);font-weight:500}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:8px}
+.checks label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.checks input{margin-top:5px;accent-color:var(--cyan)}
+.flowdot{fill:var(--cyan)}
+@media (prefers-reduced-motion: reduce){ .anim{display:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <span class="eyebrow">System Design with Param · Shorts study notes · 04</span>
+  <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">☀︎ Light</button>
+</div>
+
+<header class="hero" style="margin-top:22px">
+  <h1>Bloom filter: check 1 billion usernames in about 1 GB</h1>
+  <p class="q">“You have <b>1 billion usernames</b>. On every keystroke, the signup page asks whether a name is free. How do you answer without <b>hammering the database</b>, and without keeping every name in RAM?”</p>
+  <p class="muted">A Bloom filter gives up a little certainty to save a huge amount of memory. This page starts with why the obvious answers hurt, then builds the filter bit by bit, works out its size, and covers what goes wrong in production. Every term is explained the first time it appears.</p>
+  <nav class="toc">
+    <a href="#terms">0 · Terms</a><a href="#problem">1 · The problem</a><a href="#half">2 · Half answers</a><a href="#how">3 · How it works</a><a href="#sim1">Bit simulator</a>
+    <a href="#why">4 · Why it can't miss</a><a href="#size">5 · Sizing</a><a href="#sim2">Sizing simulator</a><a href="#code">6 · Code</a><a href="#real">7 · Real systems</a><a href="#prod">8 · Production</a><a href="#traps">9 · Interview traps</a><a href="#quiz">10 · Self-quiz</a><a href="#pick">11 · Pick points</a>
+  </nav>
+</header>
+
+<section id="terms">
+  <span class="eyebrow">0 · Words used on this page</span>
+  <h2>Quick glossary</h2>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><strong>Set membership</strong></td><td>The question “is this item in the collection?” Yes or no, nothing more. A Bloom filter answers only this. It cannot give the item back or list what's inside.</td></tr>
+    <tr><td><strong>Bit array</strong></td><td>A long row of bits, each 0 or 1. 8 bits take 1 byte, so 8 billion bits take 1 GB.</td></tr>
+    <tr><td><strong>Hash function</strong></td><td>A function that turns any input into a number that looks random. The same input always gives the same number. Here we use that number as a position in the bit array. Bloom filters use fast non-cryptographic hashes such as MurmurHash or xxHash.</td></tr>
+    <tr><td><strong>False positive</strong></td><td>The filter says “maybe present” for an item that was never added.</td></tr>
+    <tr><td><strong>False negative</strong></td><td>The filter says “not present” for an item that was added. A correctly used Bloom filter never does this.</td></tr>
+    <tr><td><strong>n, m, k, p</strong></td><td><code>n</code> = items you add. <code>m</code> = bits in the array. <code>k</code> = hash functions per item. <code>p</code> = false positive rate.</td></tr>
+    <tr><td><strong>Cache penetration</strong></td><td>Requests for keys that don't exist anywhere. The cache never holds them, so every request falls through to the database.</td></tr>
+    <tr><td><strong>LSM tree / SSTable</strong></td><td>A storage design used by Cassandra and RocksDB. Writes collect in memory, then flush to immutable sorted files called SSTables. One read may have to look through many of these files.</td></tr>
+  </table></div>
+</section>
+
+<section id="problem">
+  <span class="eyebrow">1 · The problem</span>
+  <h2>Most checks are for names nobody has</h2>
+  <p>A user typing <code>param_codes</code> fires a check for <code>p</code>, <code>pa</code>, <code>par</code>… (debouncing, meaning waiting for a typing pause, cuts this down but doesn't remove it). Multiply by every signup, and this becomes a high-volume read.</p>
+  <p>Notice what the question needs. You don't want the user's row. You only want one bit of information: <strong>does this name exist?</strong></p>
+  <p class="callout"><span class="imp">IMP</span><strong>The shape that suits a Bloom filter:</strong> a large set, an expensive lookup, and many lookups where the answer is “no”. A filter pays off by avoiding those “no” lookups.</p>
+</section>
+
+<section id="half">
+  <span class="eyebrow">2 · The half answers</span>
+  <h2>Why the obvious options hurt</h2>
+  <div class="stack">
+    <div class="card"><h3>① Query the database, with an index</h3>
+      <p><code>SELECT 1 FROM users WHERE username = ?</code> with a unique index is correct, and a single lookup is fast. The problem is volume: every check costs a connection and index page reads, and uncached pages mean disk reads. This traffic competes with the queries that actually run your product. Keep the unique index anyway, because it's the final authority.</p></div>
+    <div class="card"><h3>② Put every username in a Redis set</h3>
+      <p>Fast and exact, but it stores every name. <strong>We measured this:</strong> 1 million 17-character names in a Redis set took <strong>72 bytes each</strong> (Redis 7.0.11). The name is only 17 of those bytes. The rest is hash table overhead. Scaled to 1 billion names, that's about <strong class="bad">72 GB of RAM</strong>, plus replicas.</p></div>
+    <div class="card"><h3>③ Cache the answers</h3>
+      <p>Each name someone tries gets cached with a short lifetime. Popular names benefit, but people type endless unique variations, so hit rates are low on exactly the traffic you wanted to absorb. Memory also grows with every attempt.</p></div>
+  </div>
+  <p>What we want: almost exact, and far smaller than the data. The trick is to stop storing the names at all.</p>
+</section>
+
+<section id="how">
+  <span class="eyebrow">3 · Must-know</span>
+  <h2>How a Bloom filter works</h2>
+  <p>Burton Bloom published this in 1970. There are only three steps.</p>
+  <div class="stack">
+    <div class="card"><h3>Start</h3><p>Create a bit array of <code>m</code> bits, all 0. Choose <code>k</code> hash functions.</p></div>
+    <div class="card"><h3>Add “alice”</h3><p>Hash “alice” <code>k</code> times to get <code>k</code> positions, say 3, 11 and 25. Set those bits to 1. The name itself is <em>not stored anywhere</em>, which is why this is so small.</p></div>
+    <div class="card"><h3>Check “bob”</h3><p>Hash “bob” the same way and look at those positions.</p>
+      <ul style="margin-top:6px">
+        <li><strong class="ok">Any bit is 0:</strong> bob was <strong>definitely never added</strong>. Adding him would have set that bit.</li>
+        <li><strong class="warn">All bits are 1:</strong> bob is <strong>probably present</strong>. Those bits may have been set by other names, so you must confirm.</li>
+      </ul></div>
+  </div>
+  <div class="diagram">
+    <svg viewBox="0 0 720 300" role="img" aria-label="A username check goes to the Bloom filter. Definitely not present returns available without touching the database. Maybe present goes to the database, which gives the exact answer.">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker></defs>
+      <g fill="none" stroke-width="2">
+        <rect x="10" y="115" width="140" height="70" rx="10" style="stroke:var(--line);fill:var(--surface)"/>
+        <rect x="225" y="115" width="150" height="70" rx="10" style="stroke:var(--cyan);fill:var(--cyan-soft)"/>
+        <rect x="490" y="20" width="220" height="80" rx="10" style="stroke:var(--ok);fill:var(--ok-soft)"/>
+        <rect x="490" y="200" width="220" height="80" rx="10" style="stroke:var(--warn);fill:var(--surface)"/>
+        <path d="M150 150H223" style="stroke:var(--muted)" marker-end="url(#ah)"/>
+        <path d="M375 135L488 65" style="stroke:var(--ok)" marker-end="url(#ah)"/>
+        <path d="M375 165L488 235" style="stroke:var(--warn)" marker-end="url(#ah)"/>
+      </g>
+      <g font-size="16" text-anchor="middle">
+        <text x="80" y="145">Is “bob”</text><text x="80" y="167">free?</text>
+        <text x="300" y="145">Bloom filter</text><text x="300" y="167" style="fill:var(--muted)" font-size="13">in memory</text>
+        <text x="600" y="53" style="fill:var(--ok)">Definitely not present</text><text x="600" y="77" font-size="14">Available, no DB call</text>
+        <text x="600" y="233" style="fill:var(--warn)">Maybe present</text><text x="600" y="257" font-size="14">Ask DB, the exact answer</text>
+        <text x="405" y="78" font-size="14" style="fill:var(--ok)">a bit is 0</text>
+        <text x="405" y="232" font-size="14" style="fill:var(--warn)">all bits 1</text>
+      </g>
+    </svg>
+  </div>
+  <p class="callout"><span class="imp">IMP</span><strong>“No” is a guarantee. “Yes” is only a maybe.</strong> The filter never replaces the database. It only stops most “no” traffic from reaching it.</p>
+</section>
+
+<section id="sim1">
+  <span class="eyebrow">Interactive</span>
+  <h2>Bit simulator</h2>
+  <p class="muted">A tiny filter: 32 bits and 3 hash functions. Add a few names, then check others. Press “Find a false positive” to watch the filter get one wrong.</p>
+  <div class="sim">
+    <div class="seg" style="align-items:center">
+      <label for="nm" class="mono muted">Name</label>
+      <input id="nm" type="text" value="alice" maxlength="24" autocomplete="off" style="flex:1 1 140px;min-width:0;font:500 .9rem var(--f-mono);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:7px 10px">
+      <button class="btn primary" id="bAdd" type="button">Add</button>
+      <button class="btn" id="bChk" type="button">Check</button>
+    </div>
+    <div class="seg">
+      <button class="btn" id="bFill" type="button">Add 5 sample names</button>
+      <button class="btn" id="bFp" type="button">Find a false positive</button>
+      <button class="btn danger" id="bClr" type="button">Reset</button>
+    </div>
+    <div id="bits" style="display:grid;grid-template-columns:repeat(8,1fr);gap:5px" aria-label="Bit array"></div>
+    <div class="verdict okv" id="bv" role="status">Start by adding a name.</div>
+    <div class="stats"><span>Added: <b id="bAddedList">none</b></span><span>Bits set: <b id="bSet">0 / 32</b></span></div>
+  </div>
+  <p class="cap">The app keeps the list of added names only to label this demo. A real filter stores nothing but the bits. A real one is also much larger: 32 bits is deliberately small so collisions show up quickly.</p>
+</section>
+
+<section id="why">
+  <span class="eyebrow">4 · Must-know</span>
+  <h2>Why it can say “maybe”, but never miss</h2>
+  <ul>
+    <li><strong>No false negatives:</strong> bits only go from 0 to 1, never back. Hashing is deterministic, so an added name always lands on the same bits, and those bits are still 1.</li>
+    <li><strong>False positives:</strong> different names share bits. Enough other names can together set every bit that “bob” maps to, even though bob was never added.</li>
+    <li><strong>Why no delete:</strong> a bit set by “alice” may also be holding up “carol”. Clear it, and carol now gets “definitely not present”. That creates a false negative, the one error a Bloom filter promises not to make.</li>
+    <li><strong>Why many hash functions:</strong> with one hash, any single collision fools the filter. With 7, all 7 positions must collide. More hashes also fill the array faster, so there's a best value, shown next.</li>
+    <li><strong>Lookup time is constant:</strong> at most <code>k</code> bit reads, whether the filter holds a thousand items or a billion. A check for an absent item usually stops early at its first 0 bit. We measured an average of <strong>2.06 reads out of 7</strong>.</li>
+  </ul>
+</section>
+
+<section id="size">
+  <span class="eyebrow">5 · Must-know</span>
+  <h2>How big, and how many hashes?</h2>
+  <p>Choose how many items you expect (<code>n</code>) and what false positive rate you can accept (<code>p</code>). Two formulas give the rest:</p>
+  <pre class="card mono" style="margin:0;overflow-x:auto">bits needed      m = -n · ln(p) / (ln 2)²
+hash functions   k = (m / n) · ln 2
+false positives  p ≈ (1 - e^(-k·n/m))^k</pre>
+  <div class="card"><h3>Worked example: 1 billion usernames at 1%</h3>
+    <ul style="margin-top:6px">
+      <li><code>m = 1,000,000,000 × 4.605 / 0.4805</code> ≈ <strong>9.585 billion bits</strong>, which is 9.585 bits per name.</li>
+      <li>Divide by 8 to get bytes: about <strong>1.2 GB</strong>.</li>
+      <li><code>k = 9.585 × 0.693</code> ≈ <strong>7 hash functions</strong>.</li>
+      <li>Compared with the Redis set's 72 GB estimate, that's <strong class="ok">about 60× smaller</strong>, and name length stops mattering.</li>
+    </ul></div>
+  <div class="tbl"><table>
+    <tr><th>False positive rate</th><th>Bits per item</th><th>Hash functions</th><th>1 billion items</th></tr>
+    <tr><td>1%</td><td>9.585</td><td>7</td><td>1.2 GB</td></tr>
+    <tr><td>0.1%</td><td>14.378</td><td>10</td><td>1.8 GB</td></tr>
+    <tr><td>0.01%</td><td>19.170</td><td>14</td><td>2.4 GB</td></tr>
+  </table></div>
+  <p class="callout"><span class="imp">IMP</span><strong>About 4.8 extra bits per item cuts false positives by 10×.</strong> Size depends on the item count and the error rate, not on how long the items are.</p>
+  <h3>We ran it: 1 million real inserts, 1 million checks for absent names</h3>
+  <div class="tbl"><table>
+    <tr><th>Setup (9.585 bits per item unless noted)</th><th>False positives</th><th>Bits set</th></tr>
+    <tr><td><strong>k = 7, filled to plan</strong></td><td class="ok"><strong>1.01%</strong></td><td>51.8%</td></tr>
+    <tr><td>14.378 bits per item, k = 10</td><td class="ok">0.10%</td><td>50.1%</td></tr>
+    <tr><td>k = 1 (too few hashes)</td><td class="warn">9.92%</td><td>9.9%</td></tr>
+    <tr><td>k = 20 (too many hashes)</td><td class="warn">7.05%</td><td>87.6%</td></tr>
+    <tr><td>k = 7, <strong>2× the planned items</strong></td><td class="bad">15.75%</td><td>76.8%</td></tr>
+    <tr><td>k = 7, <strong>5× the planned items</strong></td><td class="bad">83.16%</td><td>97.4%</td></tr>
+  </table></div>
+  <p class="cap">False negatives in every run: 0. Node.js, positions from split MD5 hashes. These match the formula to within about 0.02 percentage points.</p>
+  <p>Look at the “bits set” column. The best filter is <strong>about half 1s and half 0s</strong>. Below that, memory is wasted. Above that, too many checks find only 1s. And overfilling is not a gentle failure: double the items and 1% becomes nearly 16%.</p>
+</section>
+
+<section id="sim2">
+  <span class="eyebrow">Interactive</span>
+  <h2>Sizing simulator</h2>
+  <p class="muted">Plan a filter, then drag “actually inserted” past 100% and watch the false positive rate climb. The DB meter assumes every check is for an absent name.</p>
+  <div class="sim">
+    <div class="controls">
+      <div class="ctl"><label for="sn">Planned items <b id="snv"></b></label><input id="sn" type="range" min="4" max="10" step="0.1" value="9"></div>
+      <div class="ctl"><label for="sp">Target false positives <b id="spv"></b></label><input id="sp" type="range" min="-4" max="-1" step="0.1" value="-2"></div>
+      <div class="ctl"><label for="sf">Actually inserted <b id="sfv"></b></label><input id="sf" type="range" min="10" max="500" step="10" value="100"></div>
+      <div class="ctl"><label for="sb">Name length <b id="sbv"></b></label><input id="sb" type="range" min="5" max="60" step="1" value="17"></div>
+    </div>
+    <div class="meters">
+      <div class="meter"><div class="k">Bloom filter size</div><div class="v" id="mF"></div><div class="bar"><i id="bF"></i></div></div>
+      <div class="meter"><div class="k">Redis set size (estimate)</div><div class="v" id="mS"></div><div class="bar"><i id="bS"></i></div></div>
+      <div class="meter"><div class="k">False positives now</div><div class="v" id="mP"></div><div class="bar"><i id="bP"></i></div></div>
+      <div class="meter"><div class="k">Absent-name checks reaching DB</div><div class="v" id="mD"></div><div class="bar"><i id="bD"></i></div></div>
+    </div>
+    <div class="stats"><span>Hash functions: <b id="sk"></b></span><span>Bits per planned item: <b id="sbp"></b></span></div>
+    <div class="verdict okv" id="sv" role="status"></div>
+  </div>
+  <p class="cap">Redis set estimate = items × (55 + name length) bytes, fitted to our one measurement of 72 bytes at 17 characters. Treat it as a rough figure: the real overhead changes with encoding and table size.</p>
+</section>
+
+<section id="code">
+  <span class="eyebrow">6 · Code</span>
+  <h2>The whole thing fits in about 20 lines</h2>
+  <pre class="card mono" style="margin:0;overflow-x:auto">import { createHash } from "node:crypto";
+
+class BloomFilter {
+  constructor(n, p) {
+    this.m = Math.ceil(-n * Math.log(p) / Math.LN2 ** 2);
+    this.k = Math.round((this.m / n) * Math.LN2);
+    this.bits = new Uint8Array(Math.ceil(this.m / 8));
+  }
+  *positions(item) {
+    const d = createHash("md5").update(item).digest();
+    const h1 = d.readUInt32LE(0), h2 = (d.readUInt32LE(4) | 1) &gt;&gt;&gt; 0;
+    for (let i = 0; i &lt; this.k; i++) yield (h1 + i * h2) % this.m;
+  }
+  add(item) {
+    for (const p of this.positions(item)) this.bits[p &gt;&gt; 3] |= 1 &lt;&lt; (p &amp; 7);
+  }
+  mightContain(item) {
+    for (const p of this.positions(item))
+      if (!(this.bits[p &gt;&gt; 3] &amp; (1 &lt;&lt; (p &amp; 7)))) return false;
+    return true;
+  }
+}
+
+const usernames = new BloomFilter(1_000_000, 0.01);
+usernames.add("alice");
+usernames.mightContain("alice"); // true
+usernames.mightContain("bob");   // false, almost always</pre>
+  <div class="stack">
+    <div class="card"><h3>You don't need 7 separate hash functions</h3>
+      <p>Compute two hash values and derive the rest: <code>position_i = h1 + i × h2</code>. Kirsch and Mitzenmacher showed this keeps the same false positive rate asymptotically. That's the loop above. <code>| 1</code> forces <code>h2</code> to be odd, so it can't be 0 and repeat one position. <code>&gt;&gt;&gt; 0</code> is needed because <code>|</code> in JavaScript returns a signed number, and a negative position would silently break the filter. MD5 keeps this demo free of dependencies. In production, use a faster non-cryptographic hash such as xxHash or MurmurHash.</p></div>
+    <div class="card"><h3>In production, Redis has it ready</h3>
+      <pre class="mono" style="margin:0 0 8px;overflow-x:auto">BF.RESERVE usernames 0.01 1000000000
+BF.ADD usernames "alice"
+BF.EXISTS usernames "bob"</pre>
+      <p>These commands ship with Redis Open Source 8 and later. Older versions need the RedisBloom module. Guava's <code>BloomFilter</code> is a common in-process choice for Java.</p></div>
+  </div>
+</section>
+
+<section id="real">
+  <span class="eyebrow">7 · Where it runs for real</span>
+  <h2>Three uses worth knowing</h2>
+  <div class="stack">
+    <div class="card"><h3><span class="imp">IMP</span>Databases: Cassandra and RocksDB</h3>
+      <p>In an LSM tree, one key could be in any of many SSTable files, and searching them all means disk reads. So each file gets its own filter in memory. If the filter says “not here”, the database skips that file. RocksDB's <code>NewBloomFilterPolicy(10)</code> uses about 10 bits per key for about 1% false positives. Cassandra's <code>bloom_filter_fp_chance</code> defaults to 0.01 (0.1 with leveled compaction). This is the classic senior-level answer, and it's probably where you already rely on a Bloom filter without knowing it.</p></div>
+    <div class="card"><h3>Cache penetration protection</h3>
+      <p>An attacker requests random product IDs that don't exist. The cache misses every time, and the database takes every hit. Caching “not found” doesn't help much, because each random ID is new and fills the cache with junk. Put a filter of all valid IDs in front: a “no” returns 404 straight away, and the database is never touched.</p></div>
+    <div class="card"><h3>Akamai: don't cache something seen only once</h3>
+      <p>Akamai studied one cluster over two days. <strong>74% of about 400 million objects were requested exactly once</strong>, so caching them wasted disk. Their rule: cache an object only on its <em>second</em> request, using a Bloom filter to remember what's been seen. In a test on about 47 production servers, byte hit rate rose <strong>from about 74% to 83%</strong> and disk writes fell <strong>44%</strong>.</p></div>
+    <div class="card"><h3>And a counter-example: Medium</h3>
+      <p>Medium Engineering wrote in 2025 that they made a filtering step cheaper by <em>removing</em> Bloom filters in favour of direct per-user database queries. A Bloom filter is a tool for a specific shape of problem, not an automatic upgrade.</p></div>
+  </div>
+</section>
+
+<section id="prod">
+  <span class="eyebrow">8 · Production depth</span>
+  <h2>What breaks after launch</h2>
+  <div class="stack">
+    <div class="card"><h3><span class="imp">IMP</span>“No false negatives” depends on your write path</h3>
+      <p>The guarantee holds only for items that actually reached the filter. Suppose the DB insert succeeds, then the app crashes before updating the filter. Now the filter says “definitely not present” for a real row. For usernames, the user sees “available” and signup fails. For cache penetration protection, a real product returns <strong class="bad">404</strong>.</p>
+      <p style="margin-top:8px"><strong>Fix: add to the filter first, then write to the DB.</strong> If the DB write fails, you only have a few extra stale bits, which means a tiny extra false positive rate. The wrong order creates missing data errors. The right order creates a small harmless cost.</p></div>
+    <div class="card"><h3>Always keep the unique constraint</h3>
+      <p>Two people can see “available” for the same name in the same second. The filter can't settle that. A unique index in the database decides the winner, and the loser gets a “just taken” error.</p></div>
+    <div class="card"><h3>An empty or lost filter must fail open</h3>
+      <p>A freshly restarted empty filter answers “definitely not present” for everything. If you trust it, every lookup is wrong. Persist the filter (Redis RDB/AOF, a snapshot to S3), and if it's not fully loaded, send all checks to the database. The same applies when a Redis call times out.</p></div>
+    <div class="card"><h3>Rebuilding without losing writes</h3>
+      <p>Build a new filter from a table scan while the old one keeps serving. New signups must go to <strong>both</strong> filters from before the scan begins, otherwise anything created during the scan is missing. When the scan finishes, swap them. Rebuilds are also how you size up and clear out deleted items.</p></div>
+    <div class="card"><h3>Deletes: three real options</h3>
+      <ul>
+        <li><strong>Ignore them and rebuild periodically.</strong> Deleted names become false positives, the DB check still gives the right answer. Simplest, and usually enough.</li>
+        <li><strong>Counting Bloom filter.</strong> Replace each bit with a small counter: add increments, delete decrements. It supports deletes but uses several times the memory.</li>
+        <li><strong>Cuckoo filter.</strong> Stores small fingerprints and supports deletes, with similar space at low error rates. You may only delete items you actually added, and inserts can fail when it's very full.</li>
+      </ul></div>
+    <div class="card"><h3>Growth: size for the future</h3>
+      <p>A fixed filter can't be resized, because it no longer knows the items and can't rehash them. Options: size for several years up front, rebuild when it fills, or use a <em>scalable</em> Bloom filter, which stacks a new larger filter when one fills up. Redis does this by default, but each extra filter makes checks slower. Monitor the fill level: alert when bits set goes well past 50%.</p></div>
+    <div class="card"><h3>Normalize before hashing</h3>
+      <p><code>Param</code>, <code>param</code> and <code>param </code> produce unrelated hash values. If your uniqueness rule ignores case, lowercase and trim before you add <em>and</em> before you check, using the same rule in every service. Otherwise you get false negatives.</p></div>
+    <div class="card"><h3>In-process or shared?</h3>
+      <ul>
+        <li><strong>In-process (Guava, a byte array):</strong> no network hop, but each server holds its own copy, and copies drift unless every server receives every write.</li>
+        <li><strong>Shared (Redis):</strong> one source of truth, but each check is a network call. It's still far cheaper than the database, and it adds a dependency that needs a fail-open path.</li>
+      </ul></div>
+    <div class="card"><h3>Deep extras</h3>
+      <ul>
+        <li><strong>Merging:</strong> two filters with the same <code>m</code>, <code>k</code> and hashes can be combined by OR-ing their bits. The result is the same as adding all items to one filter.</li>
+        <li><strong>CPU cache misses:</strong> 7 random positions in a 1 GB array can mean 7 cache misses. RocksDB keeps a key's probes within one cache line, trading a slightly higher error rate for speed.</li>
+        <li><strong>Attacks:</strong> if attackers know your hash and seed, they can craft inputs that set many bits or always return “maybe”. Use a secret-seeded hash when the input is attacker-controlled.</li>
+        <li><strong>Newer filters:</strong> RocksDB's Ribbon filter uses about 30% less space for the same error rate, at 3–4× the build CPU.</li>
+      </ul></div>
+    <div class="card"><h3 class="warn">When not to use one</h3>
+      <ul>
+        <li><strong>Most lookups find something.</strong> Then nearly every check returns “maybe” and still goes to the DB. The filter adds work and saves little.</li>
+        <li><strong>The set is small.</strong> A plain hash set is simple and exact.</li>
+        <li><strong>A false “yes” is costly and can't be confirmed.</strong> Without a source of truth behind it, the filter wrongly rejects about 1 in 100 free items.</li>
+        <li><strong>You need the data.</strong> It can't list items or return values.</li>
+      </ul></div>
+  </div>
+</section>
+
+<section id="traps">
+  <span class="eyebrow">9 · Interview traps</span>
+  <h2>Answers that sound right but aren't</h2>
+  <div class="stack">
+    <details><summary>“A Bloom filter tells you whether a username exists.”</summary><p>Only half. It can prove a name does <em>not</em> exist. “Maybe” still needs the database.</p></details>
+    <details><summary>“It can give false positives and false negatives.”</summary><p>False positives only. Bits never go back to 0, so an added item always finds all its bits set, unless your code skipped the add or deleted bits.</p></details>
+    <details><summary>“To delete, set that item's bits back to 0.”</summary><p>Those bits may be shared with other items, so this creates false negatives. Use a counting or cuckoo filter, or rebuild.</p></details>
+    <details><summary>“More hash functions always means better accuracy.”</summary><p>Too many fill the array. In our run at the same memory, k = 7 gave 1.01%, while k = 20 gave 7.05%.</p></details>
+    <details><summary>“A longer username needs a bigger filter.”</summary><p>Item length doesn't matter. Size depends only on item count and target error rate.</p></details>
+    <details><summary>“Once it's created, the error rate stays at 1%.”</summary><p>The 1% applies only at the planned item count. At 2× the items we measured 15.75%.</p></details>
+    <details><summary>“With the filter, we can drop the database's unique index.”</summary><p>Never. Two concurrent signups can both pass the check. Only the unique index closes that race.</p></details>
+  </div>
+</section>
+
+<section id="quiz">
+  <span class="eyebrow">10 · Self-quiz</span>
+  <h2>Check yourself (tap to reveal)</h2>
+  <div class="stack">
+    <details><summary>1. How much memory for 500 million items at 1% false positives?</summary><p>500,000,000 × 9.585 bits ≈ 4.79 billion bits. Divide by 8: about 600 MB, with k = 7.</p></details>
+    <details><summary>2. The filter says “not present” for a row that exists in the DB. List two possible causes.</summary><p>The app wrote to the DB but never updated the filter (crash, or wrong write order), or the filter restarted empty. Different normalization between add and check, or a rebuild that missed writes, are also valid answers.</p></details>
+    <details><summary>3. False positives have risen from 1% to 15% over a year. What happened, and what's the fix?</summary><p>The filter now holds about 2× the planned items. Rebuild it larger from the database, and alert on the fill level so that it doesn't happen again.</p></details>
+    <details><summary>4. 95% of lookups in your system find an existing row. Should you add a Bloom filter?</summary><p>Probably not. It only saves lookups where the answer is “no”, and that's just 5% of traffic here, while all the others pay for an extra check.</p></details>
+    <details><summary>5. Why do Cassandra and RocksDB keep a filter per SSTable file?</summary><p>A key could be in any file, and files are immutable. A small in-memory filter avoids a disk read on most files that don't hold the key. Immutability also means the filter never needs a delete.</p></details>
+  </div>
+</section>
+
+<section id="pick">
+  <span class="eyebrow">11 · For the short</span>
+  <h2>Pick the points to keep</h2>
+  <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
+  <div class="stack checks" id="checks"></div>
+  <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
+</section>
+
+<section id="sources">
+  <span class="eyebrow">Sources</span>
+  <ul class="muted">
+    <li><a href="https://doi.org/10.1145/362686.362692">Bloom (1970): Space/Time Trade-offs in Hash Coding with Allowable Errors</a></li>
+    <li><a href="https://courses.cs.duke.edu/spring16/compsci590.6/CCRpaper.pdf">Maggs &amp; Sitaraman (2015): Algorithmic Nuggets in Content Delivery (editorial note, not peer reviewed)</a></li>
+    <li><a href="https://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf">Kirsch &amp; Mitzenmacher: Less Hashing, Same Performance</a> · <a href="https://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf">Scalable Bloom Filters</a> · <a href="https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf">Cuckoo Filter (2014)</a></li>
+    <li><a href="https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/">Redis: Bloom filter docs</a> · <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter">RocksDB: Bloom filter wiki</a> · <a href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/bloom_filters.html">Cassandra: Bloom filters</a></li>
+    <li><a href="https://medium.engineering/engineering-stories-behind-the-medium-daily-digest-algorithm-part-2-c977ad0b134f">Medium Engineering (2025): Daily Digest algorithm, part 2</a></li>
+    <li>Measurements on this page: our own run on Node 24 and Redis 7.0.11, on a laptop, on 2 Nov 2026.</li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+// ---------- theme ----------
+(function(){
+  const root=document.documentElement, b=document.getElementById('theme');
+  let t='dark'; try{ t=localStorage.getItem('sdwp-theme')||'dark'; }catch(e){}
+  const apply=()=>{ root.dataset.theme=t; b.textContent = t==='dark' ? '☀︎ Light' : '☾ Dark'; };
+  apply();
+  b.onclick=()=>{ t = t==='dark'?'light':'dark'; apply(); try{ localStorage.setItem('sdwp-theme',t); }catch(e){} };
+})();
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+// ---------- bit simulator ----------
+(function(){
+  const M=32,K=3;
+  let bits=new Array(M).fill(0), names=[];
+  const fnv=(s,seed)=>{ let h=seed>>>0; for(const c of s){ h^=c.charCodeAt(0); h=Math.imul(h,16777619)>>>0; } h^=h>>>15; h=Math.imul(h,2246822519)>>>0; h^=h>>>13; return h>>>0; };
+  const pos=s=>[2166136261,84696351,3735928559].map(seed=>fnv(s,seed)%M);
+  $('bits').innerHTML=bits.map((_,i)=>'<div data-b="'+i+'" style="position:relative;border:1px solid var(--line);border-radius:6px;background:var(--sunk);text-align:center;padding:6px 0;font:600 1rem var(--f-mono)"><span>0</span><small style="display:block;font:.58rem var(--f-mono);color:var(--muted)">'+i+'</small></div>').join('');
+  const cells=[...document.querySelectorAll('[data-b]')];
+  function draw(hl,bad){
+    cells.forEach((c,i)=>{
+      c.firstChild.textContent=bits[i];
+      c.style.background=bits[i]?'var(--cyan-soft)':'var(--sunk)';
+      c.style.color=bits[i]?'var(--cyan)':'var(--muted)';
+      const on=hl&&hl.includes(i);
+      c.style.borderColor=on?(bad&&!bits[i]?'var(--bad)':'var(--warn)'):'var(--line)';
+      c.style.boxShadow=on?'0 0 0 2px '+(bad&&!bits[i]?'var(--bad)':'var(--warn)'):'none';
+    });
+    $('bAddedList').textContent=names.length?names.join(', '):'none';
+    $('bSet').textContent=bits.reduce((a,b)=>a+b,0)+' / '+M;
+  }
+  const say=(cls,t)=>{ $('bv').className='verdict '+cls; $('bv').textContent=t; };
+  const norm=()=>$('nm').value.trim().toLowerCase();
+  const add=n=>{ const p=pos(n); p.forEach(i=>bits[i]=1); if(!names.includes(n)) names.push(n); return p; };
+  $('bAdd').onclick=()=>{ const n=norm(); if(!n) return; const p=add(n); draw(p); say('okv','Added “'+n+'”. It set bits '+p.join(', ')+'. The name itself is not stored.'); };
+  $('bChk').onclick=()=>{ const n=norm(); if(!n) return; const p=pos(n), all=p.every(i=>bits[i]); draw(p,true);
+    if(!all){ const z=p.filter(i=>!bits[i]); say('okv','“'+n+'” is definitely not present: found a 0 at position '+z.join(', ')+'. No DB call needed.'); }
+    else if(names.includes(n)) say('warnv','“'+n+'”: bits '+p.join(', ')+' are all 1, so maybe present. The DB confirms it does exist.');
+    else say('badv','False positive: “'+n+'” was never added, but bits '+p.join(', ')+' are all 1. The DB will correct this.');
+  };
+  $('bFill').onclick=()=>{ ['alice','rahul','priya','aman','neha'].forEach(add); draw(); say('okv','Added 5 names. Now try checking “bob”, or find a false positive.'); };
+  $('bFp').onclick=()=>{
+    if(names.length<3) ['alice','rahul','priya','aman','neha'].forEach(add);
+    for(let i=1;i<200000;i++){ const n='user'+i; if(!names.includes(n)&&pos(n).every(j=>bits[j])&&!names.some(x=>pos(n).every(j=>pos(x).includes(j)))){ $('nm').value=n; $('bChk').click(); return; } }
+    say('warnv','No false positive found. Add a few more names and retry.');
+  };
+  $('bClr').onclick=()=>{ bits=new Array(M).fill(0); names=[]; draw(); say('okv','Empty filter. Any check now returns “definitely not present”.'); };
+  $('nm').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('bAdd').click(); } });
+  draw();
+})();
+
+// ---------- sizing simulator ----------
+(function(){
+  const fmtN=n=> n>=1e9?(n/1e9).toFixed(n>=1e10?0:1)+' billion': n>=1e6?(n/1e6).toFixed(n>=1e7?0:1)+' million': n>=1e3?Math.round(n/1e3)+'K':String(Math.round(n));
+  const fmtB=b=> b>=1e9?(b/1e9).toFixed(b>=1e11?0:1)+' GB': b>=1e6?(b/1e6).toFixed(b>=1e8?0:1)+' MB': (b/1e3).toFixed(1)+' KB';
+  const pct=p=> p>=.1?(p*100).toFixed(1)+'%': p>=.001?(p*100).toFixed(2)+'%':(p*100).toFixed(3)+'%';
+  function bar(el,f,c){ el.style.width=Math.max(1,Math.min(100,f*100))+'%'; el.style.background=c; }
+  ['sn','sp','sf','sb'].forEach(id=>$(id).oninput=calc);
+  function calc(){
+    const n=Math.round(Math.pow(10,+$('sn').value)), tp=Math.pow(10,+$('sp').value), f=+$('sf').value/100, L=+$('sb').value;
+    const m=-n*Math.log(tp)/(Math.LN2*Math.LN2), k=Math.max(1,Math.round(m/n*Math.LN2)), ins=n*f;
+    const p=Math.pow(1-Math.exp(-k*ins/m),k), fB=m/8, sB=ins*(55+L);
+    $('snv').textContent=fmtN(n); $('spv').textContent=pct(tp); $('sfv').textContent=(f*100)+'% of plan'; $('sbv').textContent=L+' chars';
+    $('mF').textContent=fmtB(fB); $('mS').textContent=fmtB(sB);
+    const top=Math.max(fB,sB);
+    bar($('bF'),fB/top,'var(--ok)'); bar($('bS'),sB/top,'var(--bad)');
+    const col=p>.1?'var(--bad)':p>2*tp?'var(--warn)':'var(--ok)';
+    $('mP').textContent=pct(p); bar($('bP'),p,col);
+    $('mD').textContent=Math.round(p*1000).toLocaleString()+' in 1,000'; bar($('bD'),p,col);
+    $('sk').textContent=k; $('sbp').textContent=(m/n).toFixed(2);
+    const v=$('sv');
+    if(f>1&&p>.1){ v.className='verdict badv'; v.textContent='Overfilled: '+pct(p)+' false positives against a '+pct(tp)+' target. Rebuild it larger.'; }
+    else if(f>1){ v.className='verdict warnv'; v.textContent='Past its plan. False positives are '+(p/tp).toFixed(1)+'× the target and still climbing.'; }
+    else { v.className='verdict okv'; v.textContent='Within plan. About '+Math.round(sB/fB).toLocaleString()+'× smaller than the set at this fill, and at most '+pct(p)+' of absent-name checks reach the DB.'; }
+  }
+  calc();
+})();
+
+// ---------- picks ----------
+(function(){
+  const pts=['1B usernames: Redis set about 72 GB (measured 72 bytes each), filter about 1.2 GB','Half answers: DB on each keystroke, Redis set, caching answers','How it works: bit array + k hashes, no names stored','"No" is a guarantee, "yes" is only a maybe, so confirm with the DB','Why no false negatives: bits never go back to 0','Why no delete: bits are shared','Sizing: 9.6 bits per item, 7 hashes for 1%','Overfill: 2x items takes 1% to about 16%, 5x to 83%','k = 7 best; k = 1 and k = 20 are both worse','Cassandra/RocksDB: one filter per SSTable skips disk reads','Cache penetration: filter of valid IDs in front of the DB','Akamai: 74% one-hit wonders, cache on second hit, 44% fewer disk writes','Write order: filter first, then DB, or real rows look missing','Keep the unique index; two signups can race','Empty filter must fail open','When not to use it: most lookups find something','Traps: longer names do not need more memory; more hashes are not always better'];
+  let saved=[]; try{ saved=JSON.parse(localStorage.getItem('sdwp-s04-picks')||'[]'); }catch(e){}
+  $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+esc(p)+'</span></label>').join('');
+  const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);
+  $('checks').onchange=()=>{ try{ localStorage.setItem('sdwp-s04-picks',JSON.stringify(get())); }catch(e){} };
+  $('copy').onclick=async()=>{
+    const txt='Short 04 picks:\n'+get().map(i=>'- '+pts[i]).join('\n');
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='Copied ✓'; }catch(e){ $('copied').textContent=txt; }
+  };
+})();
+</script>
+</body>
+</html>

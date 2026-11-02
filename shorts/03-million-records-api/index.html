@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Million Records API</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Dark-first study page; light theme via the toggle. Brand = navy + cyan + violet (same as 01-rate-limiter). */
+:root{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.14); --bad-soft:rgba(248,113,113,.12); --ok-soft:rgba(52,211,153,.12);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10); --bad-soft:rgba(220,38,38,.08); --ok-soft:rgba(21,128,61,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:1.7;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 16px 90px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2rem)}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--cyan)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0;padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px;padding-top:60px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.callout{border-left:3px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:0 10px 10px 0}
+.bad{color:var(--bad)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{font:500 .82rem var(--f-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--cyan);outline:none}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn[aria-pressed="true"]{background:var(--cyan-soft);border-color:var(--cyan);color:var(--cyan)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font:.78rem var(--f-mono);text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover{border-color:var(--cyan)}
+.hero{display:flex;flex-direction:column;gap:16px}
+.q{font-size:1.2rem;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px 18px}
+.q b{color:var(--bad)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);fill:var(--ink)}
+.diagram{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:12px}
+.cap{font-size:.86rem;color:var(--muted);margin-top:6px}
+/* sim panels */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:16px}
+.sim-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.ctl label{display:flex;justify-content:space-between;font:.78rem var(--f-mono);color:var(--muted)}
+.ctl label b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--cyan)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.meter{background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px}
+.meter .k{font:.72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.meter .v{font:600 1.35rem var(--f-display);margin:2px 0 8px}
+.bar{height:10px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .35s,background .35s}
+.verdict{font:600 1rem var(--f-display);padding:12px 14px;border-radius:10px}
+.verdict.badv{background:var(--bad-soft);color:var(--bad)}
+.verdict.okv{background:var(--ok-soft);color:var(--ok)}
+.verdict.warnv{background:rgba(251,191,36,.12);color:var(--warn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(26px,1fr));gap:4px}
+.tile{height:26px;border-radius:4px;background:var(--bg);border:1px solid var(--line);position:relative;overflow:hidden}
+.tile i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.tile.done i{background:var(--ok);width:100%!important}
+.tile.fail{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.single{height:34px;border-radius:6px;background:var(--bg);border:1px solid var(--line);overflow:hidden;position:relative}
+.single i{position:absolute;inset:0 auto 0 0;width:0;background:var(--cyan)}
+.stats{display:flex;flex-wrap:wrap;gap:18px;font:.84rem var(--f-mono);color:var(--muted)}
+.stats b{color:var(--ink);font-weight:500}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+details summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:8px}
+.checks label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer}
+.checks input{margin-top:5px;accent-color:var(--cyan)}
+.flowdot{fill:var(--cyan)}
+@media (prefers-reduced-motion: reduce){ .anim{display:none} }
+</style>
+<body>
+<div class="wrap">
+
+<div class="top">
+  <span class="eyebrow">System Design with Param · Shorts study notes · 03</span>
+  <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">☀︎ Light</button>
+</div>
+
+<header class="hero" style="margin-top:22px">
+  <h1>API returns 1 million records, server dies</h1>
+  <p class="q">“Your API returns <b>1 million records</b> in one response and the servers start <b>failing</b>. How do you fix it?”</p>
+  <p class="muted">The quick answer is “add pagination”. This page goes further: why <code>LIMIT/OFFSET</code> gets slower with every page and quietly shows duplicate rows, how keyset (cursor) pagination fixes both, the details that break naive cursor code, and what to do when someone really needs all 1 million rows (exports). Every term is explained the first time it appears.</p>
+  <nav class="toc">
+    <a href="#terms">0 · Terms</a><a href="#why">1 · Why it dies</a><a href="#offset">2 · OFFSET (half answer)</a><a href="#sim">Pagination simulator</a>
+    <a href="#keyset">3 · Keyset / cursor</a><a href="#all">4 · When you need all rows</a><a href="#traps">5 · Interview traps</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
+  </nav>
+</header>
+
+<!-- ============ 0. TERMS ============ -->
+<section id="terms">
+  <span class="eyebrow">0 · Words used on this page</span>
+  <h2>Quick glossary</h2>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><strong>Pagination</strong></td><td>Returning a big list in small pages (say 20 rows) instead of all at once. The client asks for the next page when it needs it, like scrolling a feed.</td></tr>
+    <tr><td><strong>LIMIT / OFFSET</strong></td><td>SQL for “skip this many rows, then give me that many”. <code>LIMIT 20 OFFSET 40</code> = rows 41–60.</td></tr>
+    <tr><td><strong>Index</strong></td><td>A sorted lookup structure the database keeps next to a table (usually a <em>B-tree</em>), like the index at the back of a book. It lets the DB jump straight to “orders after 10 Jan” instead of reading every row.</td></tr>
+    <tr><td><strong>Keyset pagination</strong></td><td>“Give me the 20 rows that come <em>after</em> the last one I saw”, using the sort column's value (e.g. <code>WHERE id &gt; 1040</code>) instead of a row count to skip.</td></tr>
+    <tr><td><strong>Cursor</strong></td><td>The bookmark the API hands the client for keyset pagination: usually the last row's sort values, encoded as an opaque string like <code>eyJpZCI6MTA0MH0</code>. The client just sends it back to get the next page.</td></tr>
+    <tr><td><strong>Serialization</strong></td><td>Turning objects in memory into text (JSON) to send over the network. For big results this creates a second full copy of the data in memory.</td></tr>
+    <tr><td><strong>Streaming</strong></td><td>Sending the response piece by piece as rows are read, instead of building the whole thing first.</td></tr>
+  </table></div>
+</section>
+
+<!-- ============ 1. WHY ============ -->
+<section id="why">
+  <span class="eyebrow">1 · Must-know</span>
+  <h2>Why one big response kills the server</h2>
+  <p>The innocent version: <code>GET /orders</code> → <code>orderRepository.findAll()</code> → return as JSON. Fine with 500 orders in testing. With 1 million:</p>
+  <div class="stack">
+    <div class="card"><h3>1. The data is copied into memory several times</h3>
+      <p>Say each order is about <strong>1 KB</strong> as JSON. 1,000,000 × 1 KB ≈ <strong>1 GB</strong> of JSON. But before that JSON exists, the server holds:</p>
+      <ul style="margin-top:6px">
+        <li>the rows the database driver fetched (many drivers fetch the <em>whole</em> result into memory by default: MySQL Connector/J does, and the PostgreSQL JDBC driver does unless you set a fetch size);</li>
+        <li>1 million objects (<code>Order</code> entities), which in Java usually take several times the raw data size;</li>
+        <li>the full JSON string being built.</li>
+      </ul>
+      <p style="margin-top:8px">So one request can need several GB. Ten users calling it at once: <strong class="bad">OutOfMemoryError</strong>, and every other request on that server dies too. Same story in Node: one huge array plus one huge string, and the process runs out of heap.</p></div>
+    <div class="card"><h3>2. The database and network suffer too</h3>
+      <p>The DB reads 1 million rows for every call, pushing useful data out of its cache. The 1 GB response holds a connection for a long time and often hits a timeout first (an AWS load balancer's default idle timeout is 60 seconds).</p></div>
+    <div class="card"><h3>3. The client can't use it anyway</h3>
+      <p>A phone downloading and parsing 1 GB of JSON freezes or crashes. Nobody looks at row 700,000 in a list.</p></div>
+  </div>
+  <p class="callout"><span class="imp">IMP</span><strong>Rule:</strong> every list endpoint returns a bounded page, and the server enforces the maximum (e.g. <code>limit ≤ 100</code>), not the client. Otherwise someone sends <code>?limit=1000000</code> and you're back to square one.</p>
+</section>
+
+<!-- ============ 2. OFFSET ============ -->
+<section id="offset">
+  <span class="eyebrow">2 · The half answer</span>
+  <h2>LIMIT/OFFSET: works, until page 50,000</h2>
+  <pre class="card mono" style="margin:0;overflow-x:auto">SELECT * FROM orders
+ORDER BY created_at DESC
+LIMIT 20 OFFSET 999980;   -- page 50,000</pre>
+  <div class="stack">
+    <div class="card"><h3>Problem 1: every page is slower than the last</h3>
+      <p>The database can't jump to “row 999,980”. It has no idea where that is. It walks through 999,980 rows in order, throws them away, and returns the next 20. Page 1 touches 20 rows; page 50,000 touches about a <strong>million</strong>. An index on <code>created_at</code> makes the walk cheaper, but it's still a walk. Try it in the simulator below.</p></div>
+    <div class="card"><h3>Problem 2: rows move under your feet</h3>
+      <p>You load page 1 (newest 20 orders). While you read, 3 new orders arrive at the top. Now you ask for page 2 with <code>OFFSET 20</code>: everything has shifted down by 3, so the first 3 rows of page 2 are the last 3 you already saw. <strong class="bad">Duplicates.</strong> If rows get deleted instead, some rows slide past you and you <strong class="bad">never see them</strong>. For an infinite-scroll feed or a sync job, that's a real bug.</p></div>
+    <div class="card"><h3>Where OFFSET is still fine</h3>
+      <p>Small tables, admin screens, anywhere users need “jump to page 7” and nobody goes deep. It's simple and it supports page numbers, which keyset can't.</p></div>
+  </div>
+</section>
+
+<!-- ============ SIM ============ -->
+<section id="sim">
+  <span class="eyebrow">Interactive</span>
+  <h2>Pagination simulator</h2>
+  <p class="muted">Pick a table size, a page size and how deep the user has scrolled. The bars show how many index entries the database has to touch to answer that one page, plus how big the response would be if you returned everything at once.</p>
+  <div class="sim">
+    <div class="controls">
+      <div class="ctl"><label for="rows">Rows in table <b id="rowsv"></b></label><input id="rows" type="range" min="4" max="8" step="0.1" value="6"></div>
+      <div class="ctl"><label for="ps">Page size <b id="psv"></b></label><input id="ps" type="range" min="10" max="100" step="10" value="20"></div>
+      <div class="ctl"><label for="pg">Page number <b id="pgv"></b></label><input id="pg" type="range" min="0" max="1" step="0.001" value="0.5"></div>
+      <div class="ctl"><label for="rb">Bytes per row (as JSON) <b id="rbv"></b></label><input id="rb" type="range" min="100" max="5000" step="100" value="1000"></div>
+    </div>
+    <div class="meters">
+      <div class="meter"><div class="k">OFFSET: rows touched</div><div class="v" id="mOff"></div><div class="bar"><i id="bOff"></i></div></div>
+      <div class="meter"><div class="k">Keyset: rows touched</div><div class="v" id="mKey"></div><div class="bar"><i id="bKey"></i></div></div>
+      <div class="meter"><div class="k">“Return everything” JSON size</div><div class="v" id="mAll"></div><div class="bar"><i id="bAll"></i></div></div>
+    </div>
+    <div class="verdict" id="pverdict"></div>
+  </div>
+  <p class="cap">Rows touched = index entries the database walks. Keyset also does a short index lookup (a few page reads) to find its starting point, which doesn't grow with the page number. Actual milliseconds depend on hardware and caching.</p>
+</section>
+
+<!-- ============ 3. KEYSET ============ -->
+<section id="keyset">
+  <span class="eyebrow">3 · Must-know</span>
+  <h2>The real answer: keyset (cursor) pagination</h2>
+  <p>Instead of “skip N rows”, say “start right after the last row I saw”:</p>
+  <pre class="card mono" style="margin:0;overflow-x:auto">-- first page
+SELECT * FROM orders ORDER BY id LIMIT 20;
+-- next page: last row on the previous page had id = 1040
+SELECT * FROM orders WHERE id &gt; 1040 ORDER BY id LIMIT 20;</pre>
+  <div class="stack">
+    <div class="card"><h3>Why it's fast at any depth</h3>
+      <p>With an index on <code>id</code>, the database jumps straight to 1040 in the B-tree (a handful of reads, like opening a dictionary at the right letter) and reads the next 20 entries. Page 1 and page 50,000 cost the same.</p></div>
+    <div class="card"><h3>Why it doesn't duplicate or skip</h3>
+      <p>New rows inserted elsewhere don't change what “after id 1040” means, so nothing shifts between pages.</p></div>
+    <div class="card"><h3><span class="imp">IMP</span>The detail most answers miss: ties</h3>
+      <p>Feeds sort by time, not id. But many orders can share the same <code>created_at</code>. If page 1 ends in the middle of five orders created at <code>10:00:00</code>, then <code>WHERE created_at &lt; '10:00:00'</code> skips the rest of them forever. Fix: sort by the time <strong>plus a unique column</strong> as a tie-breaker, and compare both:</p>
+      <pre class="mono" style="margin:8px 0;overflow-x:auto">SELECT * FROM orders
+WHERE (created_at, id) &lt; (:last_created_at, :last_id)
+ORDER BY created_at DESC, id DESC
+LIMIT 20;
+-- needs an index on (created_at, id)
+-- portable form: created_at &lt; :t OR (created_at = :t AND id &lt; :id)</pre></div>
+    <div class="card"><h3>What the API looks like</h3>
+      <pre class="mono" style="margin:8px 0;overflow-x:auto">GET /orders?limit=20
+→ { "data": [ …20 orders… ], "nextCursor": "eyJ0IjoiMjAyNi0xMC0zMSIsImlkIjoxMDQwfQ", "hasMore": true }
+GET /orders?limit=20&amp;cursor=eyJ0IjoiMjAyNi0xMC0zMSIsImlkIjoxMDQwfQ</pre>
+      <ul>
+        <li>The cursor is just the last row's <code>(created_at, id)</code>, encoded (here base64 JSON). Keeping it opaque lets you change the internals later without breaking clients.</li>
+        <li><strong>hasMore trick:</strong> ask the DB for <code>limit + 1</code> rows. If 21 come back, there's a next page; return 20.</li>
+        <li>Real examples: Stripe's API uses <code>starting_after=&lt;last object id&gt;</code>; GraphQL's Relay connections return <code>endCursor</code> and <code>hasNextPage</code>.</li>
+      </ul></div>
+    <div class="card"><h3>“Cursor” vs “keyset”: same thing</h3>
+      <p>Some answers list them as two different techniques. Keyset is the SQL (<code>WHERE (created_at, id) &lt; …</code>); cursor is how the API hands that position to the client. Same idea, two names.</p></div>
+    <div class="card"><h3 class="warn">What keyset can't do</h3>
+      <ul>
+        <li><strong>No “jump to page 37”.</strong> Only next (and previous, by flipping the comparison and sort). Fine for feeds and infinite scroll.</li>
+        <li><strong>Every sort option needs its own index.</strong> “Sort by price” needs <code>(price, id)</code>.</li>
+        <li><strong>Total count is expensive.</strong> <code>COUNT(*)</code> on a huge table reads a lot (in PostgreSQL it has to check each row's visibility). Show “1,000+” or an estimate instead of an exact “Page 1 of 50,000”.</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- ============ 4. ALL ROWS ============ -->
+<section id="all">
+  <span class="eyebrow">4 · Deep extras</span>
+  <h2>When someone really needs all 1 million rows</h2>
+  <p>A finance team wants a CSV export of every order. Paging through 50,000 API calls is silly. Two good options:</p>
+  <div class="stack">
+    <div class="card"><h3>① Stream it</h3>
+      <p>Read rows from the database in batches and write each one to the response as you go (CSV or newline-delimited JSON), so memory stays flat: only one batch is in RAM at a time. Two details people miss:</p>
+      <ul style="margin-top:6px">
+        <li><strong>The driver must stream too.</strong> PostgreSQL JDBC streams only with a fetch size set <em>and</em> auto-commit off; MySQL Connector/J needs <code>useCursorFetch=true</code> (or its special streaming mode). Otherwise the driver quietly loads all 1 million rows first.</li>
+        <li><strong>It still holds a connection and a DB transaction for the whole download.</strong> Fine for a few exports, not for thousands of users.</li>
+      </ul></div>
+    <div class="card"><h3>② Make it a background job (best for big exports)</h3>
+      <p>The API replies immediately: <code>202 Accepted, exportId = 77</code>. A worker builds the file, uploads it to S3, and the user gets a temporary download link (a presigned URL, the same idea as in short 01) by email or notification. The API server never holds the data.</p></div>
+    <div class="card"><h3>Same problem in search engines</h3>
+      <p>Elasticsearch refuses deep <code>from/size</code> paging by default: <code>index.max_result_window</code> is 10,000. Its answer is the same as keyset: <code>search_after</code> with the last hit's sort values.</p></div>
+  </div>
+</section>
+
+<!-- ============ 5. TRAPS ============ -->
+<section id="traps">
+  <span class="eyebrow">5 · Interview traps</span>
+  <h2>Answers that sound right but aren't</h2>
+  <div class="stack">
+    <details><summary>“Cache the 1 million records in Redis.”</summary><p>Then you're sending 1 GB from Redis instead of from the database: same memory and network problem on your API server. (And a single Redis string value can't exceed 512 MB anyway.) Caching helps repeated small reads, not huge responses.</p></details>
+    <details><summary>“Add an index, OFFSET will be fast.”</summary><p>An index lets the DB walk the rows in order without sorting, but OFFSET still walks and discards every skipped row. Deep pages stay slow.</p></details>
+    <details><summary>“Rate-limit the endpoint.”</summary><p>That limits how often it's called, not how much each call returns. One call still loads a million rows.</p></details>
+    <details><summary>“Cursor using only <code>created_at</code>.”</summary><p>Rows with identical timestamps at a page boundary get skipped. Always add a unique tie-breaker (<code>id</code>).</p></details>
+    <details><summary>“Let the client choose the page size.”</summary><p>Let it choose, but cap it on the server. <code>?limit=1000000</code> must become 100.</p></details>
+  </div>
+</section>
+
+<!-- ============ 6. QUIZ ============ -->
+<section id="quiz">
+  <span class="eyebrow">6 · Self-quiz</span>
+  <h2>Check yourself (tap to reveal)</h2>
+  <div class="stack">
+    <details><summary>1. Page 1 of your list API takes 5 ms, page 40,000 takes 3 seconds. Same query, same index. Why?</summary><p>OFFSET: the database walks and throws away all the rows before the requested page, so cost grows with the page number. Switch to keyset pagination.</p></details>
+    <details><summary>2. Users scrolling the feed sometimes see the same post twice. What's happening?</summary><p>OFFSET pagination plus new posts arriving at the top: everything shifts down, so the next page starts with rows already shown. Keyset pagination doesn't shift.</p></details>
+    <details><summary>3. Your cursor is just <code>created_at</code>. What bug will you eventually see?</summary><p>Rows sharing the boundary timestamp are skipped. Use <code>(created_at, id)</code> with an index on both.</p></details>
+    <details><summary>4. You stream an export with a JDBC fetch size of 1000, but memory still explodes. Why might that be?</summary><p>The driver ignored the fetch size: PostgreSQL's driver needs auto-commit off, MySQL's needs <code>useCursorFetch=true</code> (or streaming mode). Otherwise it loads the whole result first.</p></details>
+    <details><summary>5. How do you know there's a next page without running COUNT(*)?</summary><p>Fetch <code>limit + 1</code> rows. If you got the extra one, <code>hasMore = true</code>; return only <code>limit</code> rows.</p></details>
+  </div>
+</section>
+
+<!-- ============ 7. PICK ============ -->
+<section id="pick">
+  <span class="eyebrow">7 · For the short</span>
+  <h2>Pick the points to keep</h2>
+  <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
+  <div class="stack checks" id="checks"></div>
+  <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
+</section>
+
+<section id="sources">
+  <span class="eyebrow">Sources</span>
+  <ul class="muted">
+    <li><a href="https://use-the-index-luke.com/no-offset">Use The Index, Luke: “No offset” (keyset pagination)</a> · <a href="https://use-the-index-luke.com/sql/partial-results/fetch-next-page">Fetching the next page</a></li>
+    <li><a href="https://www.postgresql.org/docs/current/queries-limit.html">PostgreSQL: LIMIT and OFFSET (skipped rows still computed)</a></li>
+    <li><a href="https://jdbc.postgresql.org/documentation/query/#getting-results-based-on-a-cursor">PostgreSQL JDBC: cursor-based fetching</a> · <a href="https://dev.mysql.com/doc/connector-j/en/connector-j-reference-implementation-notes.html">MySQL Connector/J: result set streaming</a></li>
+    <li><a href="https://docs.stripe.com/api/pagination">Stripe API pagination</a> · <a href="https://relay.dev/graphql/connections.htm">GraphQL cursor connections spec</a></li>
+    <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html">Elasticsearch: paginate search results (search_after)</a></li>
+    <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#connection-idle-timeout">AWS ALB idle timeout</a> · <a href="https://redis.io/docs/latest/develop/data-types/strings/">Redis strings (512 MB max)</a></li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+// ---------- theme ----------
+(function(){
+  const root=document.documentElement, b=document.getElementById('theme');
+  let t='dark'; try{ t=localStorage.getItem('sdwp-theme')||'dark'; }catch(e){}
+  const apply=()=>{ root.dataset.theme=t; b.textContent = t==='dark' ? '☀︎ Light' : '☾ Dark'; };
+  apply();
+  b.onclick=()=>{ t = t==='dark'?'light':'dark'; apply(); try{ localStorage.setItem('sdwp-theme',t); }catch(e){} };
+})();
+const $=id=>document.getElementById(id);
+const fmtN=n=> n>=1e6 ? (n/1e6).toFixed(n>=1e7?0:1)+'M' : n>=1e3 ? (n/1e3).toFixed(n>=1e4?0:1)+'K' : String(Math.round(n));
+const fmtB=b=> b>=1e9 ? (b/1e9).toFixed(1)+' GB' : b>=1e6 ? Math.round(b/1e6)+' MB' : Math.round(b/1e3)+' KB';
+
+// ---------- pagination simulator ----------
+(function(){
+  ['rows','ps','pg','rb'].forEach(id=>$(id).oninput=calc);
+  function bar(el,f,c){ el.style.width=Math.max(1,Math.min(100,f*100))+'%'; el.style.background=c; }
+  function calc(){
+    const N=Math.round(Math.pow(10,+$('rows').value)), P=+$('ps').value, R=+$('rb').value;
+    const pages=Math.ceil(N/P), page=Math.max(1,Math.round(+$('pg').value*pages));
+    $('rowsv').textContent=fmtN(N); $('psv').textContent=P; $('pgv').textContent=page.toLocaleString()+' of '+pages.toLocaleString(); $('rbv').textContent=R+' B';
+    const off=(page-1)*P+P, key=P;
+    $('mOff').textContent=off.toLocaleString(); bar($('bOff'),off/N, off>1e5?'var(--bad)':off>1e4?'var(--warn)':'var(--ok)');
+    $('mKey').textContent=key.toLocaleString(); bar($('bKey'),key/N,'var(--ok)');
+    const all=N*R; $('mAll').textContent=fmtB(all); bar($('bAll'),all/2e9, all>5e8?'var(--bad)':all>5e7?'var(--warn)':'var(--ok)');
+    const v=$('pverdict'), x=Math.round(off/key);
+    if(x>1000){ v.className='verdict badv'; v.textContent='🐢 OFFSET touches '+x.toLocaleString()+'× more rows than keyset for the same 20 results. And it gets worse with every page.'; }
+    else if(x>20){ v.className='verdict warnv'; v.textContent='⚠️ OFFSET already does '+x+'× the work of keyset. Drag the page slider further.'; }
+    else { v.className='verdict okv'; v.textContent='✅ Near the first pages both are cheap. That\'s why OFFSET looks fine in testing.'; }
+  }
+  calc();
+})();
+
+// ---------- picks ----------
+(function(){
+  const pts=['1M rows × 1 KB ≈ 1 GB JSON, copied several times in memory','10 users at once = OutOfMemoryError','Server must cap page size (limit ≤ 100)','Half answer: LIMIT/OFFSET, deep pages walk and discard rows','OFFSET duplicates/skips rows when new data arrives','Keyset: WHERE id > last_id, same speed at any page','Tie-breaker: (created_at, id), not created_at alone','API shape: data + nextCursor + hasMore (limit + 1 trick)','Cursor and keyset are the same idea','Keyset can\'t jump to page N; COUNT(*) is expensive','Exports: stream (driver fetch size!) or async job → S3 link','Traps: caching / rate limiting don\'t fix it'];
+  let saved=[]; try{ saved=JSON.parse(localStorage.getItem('sdwp-s03-picks')||'[]'); }catch(e){}
+  $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+p.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></label>').join('');
+  const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);
+  $('checks').onchange=()=>{ try{ localStorage.setItem('sdwp-s03-picks',JSON.stringify(get())); }catch(e){} };
+  $('copy').onclick=async()=>{
+    const txt='Short 03 picks:\n'+get().map(i=>'- '+pts[i]).join('\n');
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='Copied ✓'; }catch(e){ $('copied').textContent=txt; }
+  };
+})();
+</script>
+</body>
+</html>
