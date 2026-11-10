@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Works in Postman, Fails in Browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Dark-first study page; light theme via the toggle. Brand = navy + cyan + violet (same as 01-rate-limiter). */
+:root{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.14); --bad-soft:rgba(248,113,113,.12); --ok-soft:rgba(52,211,153,.12);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10); --bad-soft:rgba(220,38,38,.08); --ok-soft:rgba(21,128,61,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:1.7;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 16px 90px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2rem)}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--cyan)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0;padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px;padding-top:60px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.callout{border-left:3px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:0 10px 10px 0}
+.bad{color:var(--bad)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{font:500 .82rem var(--f-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--cyan);outline:none}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn[aria-pressed="true"]{background:var(--cyan-soft);border-color:var(--cyan);color:var(--cyan)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font:.78rem var(--f-mono);text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover{border-color:var(--cyan)}
+.hero{display:flex;flex-direction:column;gap:16px}
+.q{font-size:1.2rem;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px 18px}
+.q b{color:var(--bad)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);fill:var(--ink)}
+.diagram{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:12px}
+.cap{font-size:.86rem;color:var(--muted);margin-top:6px}
+@media (prefers-reduced-motion: reduce){ .anim{display:none} }
+.flow{font:.9rem var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre;overflow-x:auto;line-height:1.6}
+</style>
+
+<body>
+<div class="wrap">
+
+<div class="top">
+  <span class="eyebrow">System Design with Param · Shorts study notes · 06</span>
+  <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">☀︎ Light</button>
+</div>
+
+<header class="hero" style="margin-top:22px">
+  <h1>Works in Postman, fails in the browser</h1>
+  <p class="q">“The API works perfectly in <b>Postman</b>. From the React app on <code>localhost:3000</code>, the console shows a red <b>CORS error</b>. Same API, same request. Why, and how do you fix it?”</p>
+  <p class="muted">Short version: the browser, not the server, is blocking it. The server has to send headers that say “this origin is allowed”, and for many requests the browser first asks permission with a preflight.</p>
+  <nav class="toc">
+    <a href="#terms">0 · Terms</a><a href="#why">1 · Why Postman works</a><a href="#simple">2 · Simple vs preflight</a><a href="#half">3 · Half answer</a>
+    <a href="#real">4 · Real answer</a><a href="#traps">5 · Traps</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
+  </nav>
+</header>
+
+<section id="terms">
+  <span class="eyebrow">0 · Words used on this page</span>
+  <h2>Quick glossary</h2>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><strong>Origin</strong></td><td>Scheme + host + port. <code>https://app.com</code> and <code>https://api.app.com</code> are different origins. So are <code>localhost:3000</code> and <code>localhost:8080</code>.</td></tr>
+    <tr><td><strong>Same-origin policy</strong></td><td>A browser rule: JavaScript loaded from one origin can't <em>read</em> responses from another origin, unless that other server allows it.</td></tr>
+    <tr><td><strong>CORS</strong></td><td>Cross-Origin Resource Sharing: the response headers (<code>Access-Control-Allow-*</code>) a server uses to allow other origins.</td></tr>
+    <tr><td><strong>Preflight</strong></td><td>An automatic <code>OPTIONS</code> request the browser sends <em>before</em> the real one, asking “may I send this?”</td></tr>
+  </table></div>
+</section>
+
+<section id="why">
+  <span class="eyebrow">1 · Must-know</span>
+  <h2>Why Postman works and the browser doesn't</h2>
+  <div class="stack">
+    <div class="card"><h3>Postman isn't a browser</h3>
+      <p>The same-origin policy exists only in browsers. Postman, curl and your backend servers ignore it, so the request just works there.</p></div>
+    <div class="card"><h3>Why browsers have the rule</h3>
+      <p>You're logged in to your bank, so the browser holds the bank's cookie. Without this rule, any website you open could run <code>fetch('https://bank.com/balance')</code>: the browser would attach your cookie, and that site could read your balance. The rule protects <strong>the user</strong>, not the server.</p></div>
+  </div>
+  <p class="callout"><span class="imp">IMP</span>The server usually <em>did</em> receive and process the request. The browser just <strong>won't hand the response to your JS</strong>. CORS is enforced by the browser and fixed on the server.</p>
+</section>
+
+<section id="simple">
+  <span class="eyebrow">2 · Must-know</span>
+  <h2>Simple request vs preflight</h2>
+  <div class="stack">
+    <div class="card"><h3>Simple request: sent directly</h3>
+      <p>GET, HEAD or POST, with only basic headers, and a <code>Content-Type</code> of form data or <code>text/plain</code>. The browser sends it and then checks the response for <code>Access-Control-Allow-Origin</code>. If it's missing → error, and the response is hidden.</p></div>
+    <div class="card"><h3>Anything else: preflight first</h3>
+      <p>PUT / DELETE / PATCH, <code>Content-Type: application/json</code>, or an <code>Authorization</code> header. That means almost every modern API call.</p>
+      <div class="flow">OPTIONS /orders
+Origin: https://app.com
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: content-type, authorization
+
+<span class="ok">204</span>
+Access-Control-Allow-Origin: https://app.com
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+Access-Control-Allow-Headers: content-type, authorization
+Access-Control-Max-Age: 600</div>
+      <p>Only if this answer allows it does the browser send the real <code>POST</code>.</p></div>
+  </div>
+</section>
+
+<section id="half">
+  <span class="eyebrow">3 · Half answer</span>
+  <h2>“Add <code>Access-Control-Allow-Origin: *</code>”</h2>
+  <div class="card"><p>It fixes the simplest case, but:</p>
+    <ul><li>With cookies / credentials, <code>*</code> is <strong>not allowed</strong>: the browser rejects it.</li>
+    <li>It doesn't answer the preflight: <code>Allow-Methods</code> and <code>Allow-Headers</code> are missing.</li>
+    <li>It opens your API to every website, which is too broad for anything private.</li></ul></div>
+</section>
+
+<section id="real">
+  <span class="eyebrow">4 · Real answer</span>
+  <h2>Fix it on the server, properly</h2>
+  <div class="stack">
+    <div class="card"><h3>① An allow-list of origins</h3>
+      <p>If the request's <code>Origin</code> is in your list, send it back in <code>Access-Control-Allow-Origin</code>, plus <code>Vary: Origin</code> so caches/CDNs don't serve one origin's answer to another.</p></div>
+    <div class="card"><h3>② Answer the preflight</h3>
+      <p>Return 204 for <code>OPTIONS</code> with <code>Allow-Methods</code>, <code>Allow-Headers</code>, and <code>Max-Age</code> (caches the preflight so it isn't sent before every call).</p></div>
+    <div class="card"><h3><span class="imp">IMP</span>③ CORS middleware <em>before</em> auth</h3>
+      <p>The most common real bug: the browser never sends cookies or the token with a preflight. If auth runs first, it returns <span class="bad">401</span> to the <code>OPTIONS</code>, the preflight fails, and it looks like a CORS problem.</p></div>
+    <div class="card"><h3>④ With cookies</h3>
+      <p>Server: <code>Access-Control-Allow-Credentials: true</code> + the exact origin (not <code>*</code>). Client: <code>fetch(url, {credentials: 'include'})</code>.</p></div>
+    <div class="card"><h3>⑤ Or avoid CORS completely</h3>
+      <p>Serve the frontend and API from the <strong>same origin</strong> through a reverse proxy (<code>app.com/api → backend</code>). In development, the Vite / CRA dev-server proxy does the same.</p></div>
+  </div>
+</section>
+
+<section id="traps">
+  <span class="eyebrow">5 · Interview traps</span>
+  <h2>Answers that sound right but aren't</h2>
+  <div class="stack">
+    <details><summary>“Fix it in the frontend.”</summary><p>The frontend can't give itself permission. The headers must come from the server (or use a proxy, so it becomes same-origin).</p></details>
+    <details><summary>“Use <code>mode: 'no-cors'</code>.”</summary><p>The error disappears, but you get an <em>opaque</em> response: status 0 and an empty body. Your JS still can't read it.</p></details>
+    <details><summary>“Echo back whatever Origin comes in, with credentials.”</summary><p>That lets <em>any</em> site read your logged-in users' data. This is a real security hole. Use an allow-list.</p></details>
+    <details><summary>“CORS protects the API from attackers.”</summary><p>No. curl and scripts ignore it completely. Protect the API with authentication, authorization and rate limiting.</p></details>
+    <details><summary>“Install a disable-CORS browser extension.”</summary><p>Works only on your machine. Your users still get the error.</p></details>
+  </div>
+</section>
+
+<section id="quiz">
+  <span class="eyebrow">6 · Self-quiz</span>
+  <h2>Check yourself (tap to reveal)</h2>
+  <div class="stack">
+    <details><summary>1. <code>app.com</code> calls <code>api.app.com</code>. Same origin?</summary><p>No: the host is different. CORS applies.</p></details>
+    <details><summary>2. Why does a JSON POST trigger a preflight but a form POST doesn't?</summary><p><code>application/json</code> isn't one of the “simple” content types, so the browser asks first.</p></details>
+    <details><summary>3. The Network tab shows <code>OPTIONS</code> → 401. What's wrong?</summary><p>Auth middleware runs before CORS. The preflight carries no token, so it's rejected. Move CORS first.</p></details>
+    <details><summary>4. You set <code>Allow-Origin: *</code> and send cookies. Why does it still fail?</summary><p>With credentials the browser requires the exact origin and <code>Allow-Credentials: true</code>.</p></details>
+    <details><summary>5. Did the server execute the request that failed with a CORS error?</summary><p>For a simple request, usually yes. The browser only hid the response. For a failed preflight, the real request was never sent.</p></details>
+  </div>
+</section>
+
+<section id="pick">
+  <span class="eyebrow">7 · For the short</span>
+  <h2>Pick the points to keep</h2>
+  <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
+  <div class="stack checks" id="checks"></div>
+  <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
+</section>
+
+<section id="sources">
+  <span class="eyebrow">Sources</span>
+  <ul class="muted">
+    <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS">MDN: Cross-Origin Resource Sharing (CORS)</a></li>
+    <li><a href="https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy">MDN: Same-origin policy</a></li>
+    <li><a href="https://fetch.spec.whatwg.org/#http-cors-protocol">Fetch standard: CORS protocol</a></li>
+  </ul>
+</section>
+
+</div>
+<script>
+// ---------- theme ----------
+(function(){
+  const root=document.documentElement, b=document.getElementById('theme');
+  let t='dark'; try{ t=localStorage.getItem('sdwp-theme')||'dark'; }catch(e){}
+  const apply=()=>{ root.dataset.theme=t; b.textContent = t==='dark' ? '☀︎ Light' : '☾ Dark'; };
+  apply();
+  b.onclick=()=>{ t = t==='dark'?'light':'dark'; apply(); try{ localStorage.setItem('sdwp-theme',t); }catch(e){} };
+})();
+
+const $=id=>document.getElementById(id);
+(function(){
+  const pts=["Origin = scheme + host + port", "Postman isn't a browser: no same-origin policy", "Why browsers have the rule: your bank cookie", "Server ran the request; browser hid the response", "Simple request vs preflight (JSON / Authorization → OPTIONS first)", "Half answer: Allow-Origin * (fails with cookies)", "Allow-list origins + Vary: Origin", "Answer the preflight: Allow-Methods / Allow-Headers / Max-Age", "CORS middleware before auth (OPTIONS → 401 bug)", "Cookies: Allow-Credentials + exact origin", "Avoid CORS: same origin via reverse proxy / dev proxy", "Traps: no-cors, echo any origin, \"CORS protects the API\""];
+  const KEY='sdwp-s06-picks';
+  let saved=[]; try{ saved=JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(e){}
+  $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+p.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></label>').join('');
+  const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);
+  $('checks').onchange=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(get())); }catch(e){} };
+  $('copy').onclick=async()=>{
+    const txt='Short 06 picks:\n'+get().map(i=>'- '+pts[i]).join('\n');
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='Copied ✓'; }catch(e){ $('copied').textContent=txt; }
+  };
+})();
+</script>
+</body>
+</html>

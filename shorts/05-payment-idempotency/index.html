@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Deducted, Payment Failed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Dark-first study page; light theme via the toggle. Brand = navy + cyan + violet (same as 01-rate-limiter). */
+:root{
+  --bg:#0a1020; --surface:#101a2f; --sunk:#0c1527; --ink:#e5ebf6; --muted:#94a2bc; --line:#22304c;
+  --cyan:#22d3ee; --violet:#a78bfa; --ok:#34d399; --bad:#f87171; --warn:#fbbf24;
+  --cyan-soft:rgba(34,211,238,.10); --violet-soft:rgba(167,139,250,.14); --bad-soft:rgba(248,113,113,.12); --ok-soft:rgba(52,211,153,.12);
+  --f-display:"Bricolage Grotesque","Avenir Next",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#f3f6fb; --surface:#ffffff; --sunk:#e9eef7; --ink:#0c1427; --muted:#56647d; --line:#d5dcea;
+  --cyan:#0e7490; --violet:#6d28d9; --ok:#15803d; --bad:#dc2626; --warn:#b45309;
+  --cyan-soft:rgba(14,116,144,.10); --violet-soft:rgba(109,40,217,.10); --bad-soft:rgba(220,38,38,.08); --ok-soft:rgba(21,128,61,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:1.7;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 16px 90px}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;margin:0;text-wrap:balance}
+h1{font-size:clamp(2.1rem,6vw,3.4rem);letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3.6vw,2rem)}
+h3{font-size:1.2rem}
+p{margin:0}
+a{color:var(--cyan)}
+strong{font-weight:600}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+:not(pre)>code{background:var(--sunk);border:1px solid var(--line);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0;padding-left:1.25em;display:flex;flex-direction:column;gap:6px}
+li::marker{color:var(--muted)}
+.eyebrow{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+.muted{color:var(--muted)}
+.imp{font-family:var(--f-mono);font-size:.62rem;font-weight:600;letter-spacing:.06em;background:var(--violet);color:var(--bg);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px;padding-top:60px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.callout{border-left:3px solid var(--violet);background:var(--violet-soft);padding:12px 16px;border-radius:0 10px 10px 0}
+.bad{color:var(--bad)} .ok{color:var(--ok)} .warn{color:var(--warn)}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.btn{font:500 .82rem var(--f-mono);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--cyan);outline:none}
+.btn.primary{background:var(--cyan);color:var(--bg);border-color:var(--cyan)}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn[aria-pressed="true"]{background:var(--cyan-soft);border-color:var(--cyan);color:var(--cyan)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font:.78rem var(--f-mono);text-decoration:none;color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:999px;background:var(--surface)}
+nav.toc a:hover{border-color:var(--cyan)}
+.hero{display:flex;flex-direction:column;gap:16px}
+.q{font-size:1.2rem;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px 18px}
+.q b{color:var(--bad)}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--f-mono);fill:var(--ink)}
+.diagram{background:var(--sunk);border:1px solid var(--line);border-radius:12px;padding:12px}
+.cap{font-size:.86rem;color:var(--muted);margin-top:6px}
+@media (prefers-reduced-motion: reduce){ .anim{display:none} }
+.flow{font:.9rem var(--f-mono);background:var(--sunk);border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre;overflow-x:auto;line-height:1.6}
+</style>
+
+<body>
+<div class="wrap">
+
+<div class="top">
+  <span class="eyebrow">System Design with Param · Shorts study notes · 05</span>
+  <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">☀︎ Light</button>
+</div>
+
+<header class="hero" style="margin-top:22px">
+  <h1>Money deducted, but payment failed</h1>
+  <p class="q">“The app says <b>Payment failed</b>, but ₹2,000 has left the user's bank account. The user taps Pay again. How do you make sure they aren't <b>charged twice</b>, and the first ₹2,000 isn't lost?”</p>
+  <p class="muted">Short version: a timeout doesn't mean the payment failed, a retry must not charge twice (idempotency key), and a daily job catches whatever slipped through (reconciliation).</p>
+  <nav class="toc">
+    <a href="#terms">0 · Terms</a><a href="#why">1 · How it breaks</a><a href="#half">2 · Half answer</a><a href="#real">3 · Real answer</a>
+    <a href="#key">4 · Idempotency key</a><a href="#traps">5 · Traps</a><a href="#quiz">6 · Self-quiz</a><a href="#pick">7 · Pick points</a>
+  </nav>
+</header>
+
+<section id="terms">
+  <span class="eyebrow">0 · Words used on this page</span>
+  <h2>Quick glossary</h2>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>What it means</th></tr>
+    <tr><td><strong>Idempotent</strong></td><td>Doing it 2 times gives the same result as doing it once. A lift button is idempotent: press it 5 times, one lift comes.</td></tr>
+    <tr><td><strong>Idempotency key</strong></td><td>A unique ID (e.g. a UUID) the client sends with a request. If the server has already seen that key, it doesn't redo the work. It returns the first result.</td></tr>
+    <tr><td><strong>Payment gateway</strong></td><td>The middle layer (Razorpay, PayU, Stripe) between your server and the bank / UPI.</td></tr>
+    <tr><td><strong>Webhook</strong></td><td>The gateway calls <em>your</em> URL later to say “payment X is now SUCCESS / FAILED”.</td></tr>
+    <tr><td><strong>Reconciliation</strong></td><td>Matching your own payment records against the bank's or gateway's report (the settlement file) and fixing every mismatch.</td></tr>
+  </table></div>
+</section>
+
+<section id="why">
+  <span class="eyebrow">1 · Must-know</span>
+  <h2>How the money “disappears”</h2>
+  <div class="flow">App ──▶ Your server ──▶ Gateway ──▶ Bank   <span class="ok">✔ ₹2,000 debited</span>
+App ◀────── Your server ◀─<span class="bad">✘</span>── Gateway ◀──── Bank   <span class="bad">reply lost / timed out</span></div>
+  <div class="stack">
+    <div class="card"><h3>The debit worked. Only the reply got lost.</h3>
+      <p>A network drop or a 30 s timeout between the gateway and <strong>your server</strong>. Your server never hears “success”, so it marks the payment “failed”. But the bank has already moved the money.</p></div>
+    <div class="card"><h3>Not the same thing: the user kills the app</h3>
+      <p>Then only <em>server → app</em> breaks. Your server still gets the reply and saves SUCCESS. The app just asks for the order status when it's reopened. The hard case is the one above, where <strong>your server itself</strong> doesn't know.</p></div>
+    <div class="card"><h3>Now there are two dangers</h3>
+      <ul><li><strong>The user pays again</strong> → charged twice.</li><li><strong>Nobody follows up</strong> → ₹2,000 debited and no order. The user is angry.</li></ul></div>
+  </div>
+  <p class="callout"><span class="imp">IMP</span><strong>Rule:</strong> a timeout means <em>“I don't know”</em>, not <em>“failed”</em>. Treating unknown as failed causes this whole problem.</p>
+</section>
+
+<section id="half">
+  <span class="eyebrow">2 · Half answer</span>
+  <h2>“Just retry the payment”</h2>
+  <div class="card"><p>Retrying is right. A <strong>blind</strong> retry is wrong: the first debit may have gone through, so the retry debits again. Retries are only safe when the server can tell “this is the same payment again”. That is exactly what an idempotency key does.</p></div>
+</section>
+
+<section id="real">
+  <span class="eyebrow">3 · Real answer</span>
+  <h2>Four pieces</h2>
+  <div class="stack">
+    <div class="card"><h3>① State machine, with PENDING</h3>
+      <div class="flow">CREATED ──▶ PENDING ──▶ SUCCESS
+                       └──▶ FAILED</div>
+      <p>On a timeout the payment stays <strong>PENDING</strong>. The app shows “Payment processing, we'll update you”, not “failed”. It moves to SUCCESS or FAILED only when there's proof.</p></div>
+    <div class="card"><h3>② Idempotency key on every payment request</h3>
+      <p>A retry with the same key returns the first result instead of charging again. Details in section 4.</p></div>
+    <div class="card"><h3>③ Find out the truth</h3>
+      <ul><li><strong>Webhook</strong> from the gateway with the final status. Verify its signature; the handler must be idempotent too (the same webhook can arrive twice).</li>
+      <li><strong>Status poll:</strong> a job that asks the gateway “what happened to payment X?” for anything PENDING for more than a few minutes.</li></ul></div>
+    <div class="card"><h3>④ Reconciliation job (the safety net)</h3>
+      <p>Daily: compare your DB with the gateway's / bank's settlement report.</p>
+      <ul><li>Debited, but no order → <span class="ok">complete the order</span> or <span class="ok">auto-refund</span>.</li><li>Marked paid, but no debit → flag it for someone to check.</li></ul></div>
+  </div>
+  <p class="callout"><span class="imp">IMP</span>India: RBI's turnaround-time rules say a failed UPI debit must be reversed by <strong>T+1</strong> (the next day), or the bank pays <strong>₹100/day</strong> compensation. <span class="warn">(verify the current circular before quoting it)</span></p>
+</section>
+
+<section id="key">
+  <span class="eyebrow">4 · Must-know</span>
+  <h2>How the idempotency key works</h2>
+  <div class="stack">
+    <div class="card"><h3>Who makes the key, and when</h3>
+      <p>The <strong>client</strong> creates it once per checkout (e.g. <code>Idempotency-Key: 7f3c…</code> header) and reuses the same key on every retry of that checkout. If the server created it, a retry would arrive with no key, and the server couldn't connect the two requests.</p></div>
+    <div class="card"><h3>What the server does</h3>
+      <div class="flow">Request arrives with key K
+  INSERT K, status = IN_PROGRESS        <span class="muted">(unique constraint on K)</span>
+    ├─ insert worked   → charge, save the response against K, return it
+    └─ K already there → COMPLETED?   return the saved response, no new charge
+                         IN_PROGRESS? return 409 "still processing"</div>
+      <p>Table: <code>idempotency_keys(key PRIMARY KEY, request_hash, status, response, created_at)</code>. Old keys are cleaned up after ~24 h.</p></div>
+    <div class="card"><h3><span class="imp">IMP</span>The race most answers miss</h3>
+      <p>Two retries arrive at the same moment. With <em>“check if the key exists, then insert it”</em>, both checks see nothing → both charge. The fix is to let the <strong>unique constraint</strong> decide (or Redis <code>SET K NX</code>): only one insert can win. Same idea as Day 2's oversold item.</p></div>
+    <div class="card"><h3>Same key, different body?</h3>
+      <p>Store a hash of the request. Same key with a different amount → reject it (Stripe returns an error). Otherwise a bug could silently return an old payment's result.</p></div>
+    <div class="card"><h3>Pass it down</h3>
+      <p>Send the same key (or your order ID) to the gateway too, so the <em>gateway</em> also refuses a second charge. Stripe supports an <code>Idempotency-Key</code> header directly.</p></div>
+  </div>
+</section>
+
+<section id="traps">
+  <span class="eyebrow">5 · Interview traps</span>
+  <h2>Answers that sound right but aren't</h2>
+  <div class="stack">
+    <details><summary>“Wrap it in a DB transaction.”</summary><p>The bank call is outside your database. A rollback can't undo money that the bank has already moved.</p></details>
+    <details><summary>“Retry with exponential backoff.”</summary><p>Good for <em>when</em> to retry. Without an idempotency key every retry is still a new charge.</p></details>
+    <details><summary>“New key every time the user taps Pay.”</summary><p>Then every tap looks like a new payment. One key per checkout / order.</p></details>
+    <details><summary>“Check the key in Redis, then process.”</summary><p>Check-then-act is a race. Use an atomic insert (<code>SET NX</code> or a unique constraint).</p></details>
+    <details><summary>“POST is idempotent if we're careful.”</summary><p>By definition GET, PUT and DELETE are idempotent and POST isn't. That's why POST needs a key.</p></details>
+  </div>
+</section>
+
+<section id="quiz">
+  <span class="eyebrow">6 · Self-quiz</span>
+  <h2>Check yourself (tap to reveal)</h2>
+  <div class="stack">
+    <details><summary>1. The gateway call timed out. What status do you save?</summary><p>PENDING. Then the webhook, the status poll or reconciliation decides the final state.</p></details>
+    <details><summary>2. Two requests with the same key arrive 5 ms apart. What stops a double charge?</summary><p>The unique constraint on the key: the second insert fails, so it returns 409 or the saved response.</p></details>
+    <details><summary>3. Why must the client generate the key?</summary><p>Only the client knows that two requests are the same checkout. A server-made key is new on every request.</p></details>
+    <details><summary>4. The webhook says SUCCESS twice for the same payment. What happens?</summary><p>Nothing the second time: the handler checks that it's already SUCCESS (or dedupes by event ID) and ignores it.</p></details>
+    <details><summary>5. The bank debited, there's no webhook, and the poll failed too. Who catches it?</summary><p>The daily reconciliation job: debited with no order → complete it or refund.</p></details>
+  </div>
+</section>
+
+<section id="pick">
+  <span class="eyebrow">7 · For the short</span>
+  <h2>Pick the points to keep</h2>
+  <p class="muted">Ticks are saved in this browser. Press “Copy my picks” and paste them in chat.</p>
+  <div class="stack checks" id="checks"></div>
+  <div><button class="btn primary" id="copy">Copy my picks</button> <span class="muted mono" id="copied"></span></div>
+</section>
+
+<section id="sources">
+  <span class="eyebrow">Sources</span>
+  <ul class="muted">
+    <li><a href="https://docs.stripe.com/api/idempotent_requests">Stripe: Idempotent requests</a></li>
+    <li><a href="https://stripe.com/blog/idempotency">Stripe blog: Designing robust and predictable APIs with idempotency</a></li>
+    <li><a href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/">IETF draft: The Idempotency-Key HTTP header</a></li>
+    <li>RBI circular (Sept 2019): Harmonisation of Turn Around Time and customer compensation for failed transactions</li>
+  </ul>
+</section>
+
+</div>
+<script>
+// ---------- theme ----------
+(function(){
+  const root=document.documentElement, b=document.getElementById('theme');
+  let t='dark'; try{ t=localStorage.getItem('sdwp-theme')||'dark'; }catch(e){}
+  const apply=()=>{ root.dataset.theme=t; b.textContent = t==='dark' ? '☀︎ Light' : '☾ Dark'; };
+  apply();
+  b.onclick=()=>{ t = t==='dark'?'light':'dark'; apply(); try{ localStorage.setItem('sdwp-theme',t); }catch(e){} };
+})();
+
+const $=id=>document.getElementById(id);
+(function(){
+  const pts=["Bank debited, only the response got lost", "Timeout = \"I don't know\", not \"failed\"", "Half answer: blind retry = double charge", "State machine: CREATED → PENDING → SUCCESS / FAILED", "Idempotency key: client makes it once per checkout", "Server: insert key (unique) → charge → save response; repeat returns saved response", "Race: check-then-insert double charges; unique constraint / SET NX fixes it", "Same key + different amount → reject", "Webhook + status poll find the truth", "Reconciliation job: debited with no order → complete or refund", "RBI T+1 reversal / ₹100 per day (verify)", "Traps: DB transaction, backoff alone, new key per tap"];
+  const KEY='sdwp-s05-picks';
+  let saved=[]; try{ saved=JSON.parse(localStorage.getItem(KEY)||'[]'); }catch(e){}
+  $('checks').innerHTML=pts.map((p,i)=>'<label><input type="checkbox" data-i="'+i+'"'+(saved.includes(i)?' checked':'')+'><span>'+p.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></label>').join('');
+  const get=()=>[...document.querySelectorAll('#checks input')].filter(c=>c.checked).map(c=>+c.dataset.i);
+  $('checks').onchange=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(get())); }catch(e){} };
+  $('copy').onclick=async()=>{
+    const txt='Short 05 picks:\n'+get().map(i=>'- '+pts[i]).join('\n');
+    try{ await navigator.clipboard.writeText(txt); $('copied').textContent='Copied ✓'; }catch(e){ $('copied').textContent=txt; }
+  };
+})();
+</script>
+</body>
+</html>
